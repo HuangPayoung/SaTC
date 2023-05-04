@@ -254,7 +254,7 @@ def ghidra_analysise(args, border_bin):
             p = subprocess.Popen(ghidra_args)
             p.wait()
 
-    # 移除GHIdra Project目录和rep目录
+    # 移除Ghidra Project目录和rep目录
     if not args.save_ghidra_project:
         shutil.rmtree(ghidra_project)
 
@@ -269,6 +269,7 @@ def main():
             sys.exit(-1)
 
     bin_list = front_analysise(args)
+    # bin_list = [("httpd", "/home/hacker/IoT/SaTC/test-data/upload/_R7000P-V1.3.3.154_10.1.86.chk.extracted/squashfs-root/usr/sbin/httpd")]
     if args.ghidra_script:
         if ("share2sink" in args.ghidra_script and args.ref2share_result) or ("share2sink" not in args.ghidra_script):
             ghidra_analysise(args, bin_list)

@@ -170,6 +170,7 @@ class BackAnalysise(_BaseAnalysise):
                         elf_keyword.remove(e_k)
 
     def get_result(self):
+        # 按照关键字符串的数量对二进制排序的
         # sorted(self.results, key=lambda elem: (elem["functions_count"], elem["keywords_count"]), reverse=True)
         for elf, analysis, _keyword, _function in self.elf_result:
             r = {}
