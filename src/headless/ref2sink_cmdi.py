@@ -15,7 +15,7 @@ import re
 DEBUG = False
 
 heuristicMin = 4
-sinks = ['system', '___system', 'bstar_system', 'popen',
+sinks = ['system', 'do_system', '___system', 'bstar_system', 'popen',
          'doSystemCmd', 'doShell', 'twsystem', 'CsteSystem', 'cgi_deal_popen',
          'ExeCmd', 'ExecShell', 'exec_shell_popen', 'exec_shell_popen_str'
          ]
@@ -25,6 +25,7 @@ heuristicIgnoreFunctions = ['strcpy', 'strncpy', 'strcat', 'memcpy']
 
 
 needCheckConstantStr = {
+    'do_system': 0,
     'system': 0,
     'fwrite': 0,
     '___system': 0,

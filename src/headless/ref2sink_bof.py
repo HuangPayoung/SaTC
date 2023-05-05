@@ -22,6 +22,7 @@ heuristicIgnoreFunctions = ['strcpy', 'strncpy', 'strcat', 'memcpy']
 
 
 needCheckConstantStr = {
+    'do_system': 0,
     'system': 0,
     'fwrite': 0,
     '___system': 0,

@@ -19,7 +19,7 @@ import shutil
 import argparse
 import uuid
 import os
-
+import json
 import sys
 
 sys.setrecursionlimit(5000)
@@ -193,6 +193,11 @@ def front_analysise(args):
         o.write_upnp_keywords(res)
         o.write_upnp_analysise(upapanalysise)
 
+    # 存储第一阶段得到的border_bin结果
+    border_bin_json = os.path.join(front_result_output, "border_bin.json")
+    with open(border_bin_json, 'w') as f:
+        json.dump(border_bin, f, indent=2)
+
     return border_bin
 
 
@@ -215,8 +220,6 @@ def ghidra_analysise(args, border_bin):
     # loop ghidra_scripts
     for s in ghidra_scripts:
         keyword_file = ""
-        if s == "share2sink" and args.ref2share_result:
-            keyword_file = args.ref2share_result
         exec_script = scripts.get(s, "")
         if exec_script == "":
             log.error("没有找到%s脚本", args.ghidra_script)
@@ -224,7 +227,10 @@ def ghidra_analysise(args, border_bin):
         random = uuid.uuid4().hex
 
         for binname, binpath in border_bin:
-            if not keyword_file:
+            # 从工作逻辑上讲，share2sink应该只支持单个二进制，因为要手动指定args.ref2share_result的话一次就只能指定一个result文件
+            if s == "share2sink" and args.ref2share_result:
+                keyword_file = args.ref2share_result
+            else:
                 keyword_file = os.path.join(front_result_output, "simple", ".data", binname + ".result")
             ghidra_rep = os.path.join(ghidra_project, binname + "_" + s) + ".rep"
 
@@ -268,8 +274,10 @@ def main():
             print("Please use --ref2share_result args input ref2share script result")
             sys.exit(-1)
 
-    bin_list = front_analysise(args)
-    # bin_list = [("httpd", "/home/hacker/IoT/SaTC/test-data/upload/_R7000P-V1.3.3.154_10.1.86.chk.extracted/squashfs-root/usr/sbin/httpd")]
+    # bin_list = front_analysise(args)
+    border_bin_json = os.path.join(front_result_output, "border_bin.json")
+    with open(border_bin_json) as f:
+        bin_list = json.load(f)
     if args.ghidra_script:
         if ("share2sink" in args.ghidra_script and args.ref2share_result) or ("share2sink" not in args.ghidra_script):
             ghidra_analysise(args, bin_list)
