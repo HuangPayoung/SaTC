@@ -59,6 +59,9 @@ def argsparse():
 
     parser.add_argument("--save_ghidra_project", required=False, action="store_true",
                         help="whether to save the ghidra project")
+    
+    parser.add_argument("--skip_keyword_extract", required=False, action="store_true",
+                        help="If this is enabled, SaTC will try to search previous keyword results.")
 
     # 是否启用污点分析，默认不启用
     parser.add_argument("--taint_check", required=False, action="store_true", default=False,
@@ -274,10 +277,15 @@ def main():
             print("Please use --ref2share_result args input ref2share script result")
             sys.exit(-1)
 
-    # bin_list = front_analysise(args)
-    border_bin_json = os.path.join(front_result_output, "border_bin.json")
-    with open(border_bin_json) as f:
-        bin_list = json.load(f)
+    if not args.skip_keyword_extract:
+        bin_list = front_analysise(args)
+    else:
+        border_bin_json = os.path.join(front_result_output, "border_bin.json")
+        if not os.path.isfile(border_bin_json):
+            print("Fail to find border_bin.json!")
+            sys.exit(-1)
+        with open(border_bin_json) as f:
+            bin_list = json.load(f)
     if args.ghidra_script:
         if ("share2sink" in args.ghidra_script and args.ref2share_result) or ("share2sink" not in args.ghidra_script):
             ghidra_analysise(args, bin_list)
