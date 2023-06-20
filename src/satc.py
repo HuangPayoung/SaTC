@@ -101,6 +101,12 @@ def argsparse():
 
     return args
 
+def find_file_path(folder_path, filename):
+    for root, dirs, files in os.walk(folder_path):
+        if filename in files:
+            return os.path.join(root, filename)
+    return None
+
 
 def front_analysise(args):
     # Run front-end keyword extraction, return border bin list
@@ -220,8 +226,50 @@ def ghidra_analysise(args, border_bin):
     if not os.path.isdir(ghidra_project):
         os.makedirs(ghidra_project)
 
+    # dispose config_setter of all border binaries first to support cross binary analysis
+    config_setter_sum = os.path.join(ghidra_result_output, "config_setter_sum.json")
+    isExist = os.path.exists(config_setter_sum)
+    if ("share2sink" in ghidra_scripts or "ref2share" in ghidra_scripts):
+    # if ("share2sink" in ghidra_scripts or "ref2share" in ghidra_scripts) and not isExist:
+        # run ref2share
+        s = "ref2share"
+        random = uuid.uuid4().hex
+        exec_script = scripts.get("ref2share", "")
+        # loop border binaries
+        for binname, binpath in border_bin:
+            keyword_file = os.path.join(front_result_output, "simple", ".data", binname + ".result")
+            ghidra_rep = os.path.join(ghidra_project, binname + "_" + s) + ".rep"
+            bin_ghidra_project = os.path.join(ghidra_result_output, binname)
+            if not os.path.isdir(bin_ghidra_project):
+                os.makedirs(bin_ghidra_project)
+
+            # 复制分析到binpath到bin_ghidra_project目录
+            print("copy {} to {}".format(binname, bin_ghidra_project))
+            shutil.copy2(binpath, bin_ghidra_project)
+
+            output_name = os.path.join(bin_ghidra_project, "{}_{}.result".format(binname, s))
+            # config_setter_sum = os.path.join(ghidra_result_output, "config_setter_sum.json")
+
+            project_name = binname + "_" + s + random
+
+            ghidra_args = [
+                HEADLESS_GHIDRA, ghidra_project, project_name,
+                '-postscript', exec_script, keyword_file, output_name, config_setter_sum, binname,
+                '-scriptPath', os.path.dirname(exec_script)
+            ]
+            if os.path.exists(ghidra_rep):
+                ghidra_args += ['-process', os.path.basename(binpath)]
+            else:
+                ghidra_args += ['-import', "'" + binpath + "'"]
+
+            p = subprocess.Popen(ghidra_args)
+            p.wait()
+        
+
     # loop ghidra_scripts
     for s in ghidra_scripts:
+        if s == "ref2share":
+            continue
         keyword_file = ""
         exec_script = scripts.get(s, "")
         if exec_script == "":
@@ -229,10 +277,13 @@ def ghidra_analysise(args, border_bin):
 
         random = uuid.uuid4().hex
 
+        # loop border binaries
         for binname, binpath in border_bin:
             # 从工作逻辑上讲，share2sink应该只支持单个二进制，因为要手动指定args.ref2share_result的话一次就只能指定一个result文件
-            if s == "share2sink" and args.ref2share_result:
-                keyword_file = args.ref2share_result
+            # 修改后，不再需要单独指定ref2share_result
+            if s == "share2sink":
+                # keyword_file = args.ref2share_result
+                keyword_file = os.path.join(ghidra_result_output, "config_setter_sum.json")
             else:
                 keyword_file = os.path.join(front_result_output, "simple", ".data", binname + ".result")
             ghidra_rep = os.path.join(ghidra_project, binname + "_" + s) + ".rep"
@@ -272,10 +323,6 @@ def main():
     start_time = datetime.datetime.now()
     log.info("Start analysis time : {}".format(str(start_time)))
     args = argsparse()
-    if args.ghidra_script:
-        if "share2sink" in args.ghidra_script and not args.ref2share_result:
-            print("Please use --ref2share_result args input ref2share script result")
-            sys.exit(-1)
 
     if not args.skip_keyword_extract:
         bin_list = front_analysise(args)
@@ -286,12 +333,25 @@ def main():
             sys.exit(-1)
         with open(border_bin_json) as f:
             bin_list = json.load(f)
+    
+    # Support specify multi-bin manually.
+    if args.bin:
+        bin_list = []
+        for bin in args.bin:
+            bin_path = find_file_path(args.directory, bin)
+            if bin_path is None:
+                print("Fail to locate bin file: {}!".format(bin))
+                sys.exit(-1)
+            else:
+                bin_list.append([bin, bin_path])
+
     if args.ghidra_script:
-        if ("share2sink" in args.ghidra_script and args.ref2share_result) or ("share2sink" not in args.ghidra_script):
-            ghidra_analysise(args, bin_list)
-        elif "share2sink" in args.ghidra_script and not args.ref2share_result:
-            print("Please use --ref2share_result args input ref2share script result")
-            sys.exit(-1)
+        ghidra_analysise(args, bin_list)
+        # if ("share2sink" in args.ghidra_script and args.ref2share_result) or ("share2sink" not in args.ghidra_script):
+        #     ghidra_analysise(args, bin_list)
+        # elif "share2sink" in args.ghidra_script and not args.ref2share_result:
+        #     print("Please use --ref2share_result args input ref2share script result")
+        #     sys.exit(-1)
 
 
     if args.ghidra_script and args.taint_check:

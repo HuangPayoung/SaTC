@@ -11,11 +11,13 @@ from ghidra.program.model.mem import MemoryAccessException
 from ghidra.util.exception import CancelledException
 from collections import Counter, defaultdict
 import re
+import json
+import os
 
-DEBUG = False
+DEBUG = True
 
 heuristicMin = 4
-sinks = ['nvram_safe_set', 'nvram_bufset', 'setenv']
+sinks = ['nvram_safe_set', 'nvram_bufset', 'setenv', 'nvram_set']
 digest = ['strcpy', 'sprintf', 'memcpy', 'strcat']
 
 heuristicIgnoreFunctions = ['strcpy', 'strncpy', 'strcat', 'memcpy']
@@ -40,17 +42,20 @@ needCheckFormat = {
     'doShell': 0
 }
 
+# (keyword string, value)
+# zero means the first parameter
 shareFunctionKeyValuePos = {
     'nvram_safe_set': (0, 1),
     'nvram_bufset': (1, 2),
-    'setenv': (0, 1)
+    'setenv': (0, 1),
+    'nvram_set': (1, 2)
 }
 
 shareResult = defaultdict(set)
 syms = {}
 newParam = defaultdict(set)
 analyzer = None
-
+config_setter_sum_data = defaultdict(list)
 
 def a2h(address):
     return '0x' + str(address)
@@ -237,13 +242,19 @@ def findSinkPath(refaddr, stringaddr, stringval):
         s = getStrArg(addr, shareFunctionKeyValuePos[callee.name][0])
         if s:
             shareResult[callee].add(s)
+            shared_keyword = s
+            call_site = bin_name + ' ' + callee.getName() + ' ' + a2h(addr)
+            if call_site not in config_setter_sum_data[shared_keyword]:
+                config_setter_sum_data[shared_keyword].append(call_site)
+            # config_setter_sum_data.append(bin_name + ' ' + callee.getName() + ' ' + s + ' ' + a2h(addr))
+            # print >>config_setter_sum, bin_name, callee, s, a2h(addr)
         print >>f, s or '*unkonwn*'
 
     def dfs(func, path, start=None):
         '''path: list of (addr of call, callee, callDigestFunc)'''
         if func.name in sinks and len(path):
-            if func.name in shareFunctionKeyValuePos and checkConstantStr(path[-1][0], shareFunctionKeyValuePos[func.name][1]):
-                return False
+            # if func.name in shareFunctionKeyValuePos and checkConstantStr(path[-1][0], shareFunctionKeyValuePos[func.name][1]):
+            #     return False
             printpath(path)
             return True
         callDigestFunc = False
@@ -334,8 +345,22 @@ if __name__ == '__main__':
     args = getScriptArgs()
     paramTargets = set(open(args[0]).read().strip().split())
     f = None
+    config_setter_sum = None
+    bin_name = None
+    preResult = None
     if len(args) > 1:
         f = open(args[1], 'w')
+    if len(args) > 2:
+        # config_setter_sum = open(args[2], 'a')
+        tmp_path = args[2]
+        bin_name = args[3] or "unknown"
+        if os.path.exists(tmp_path):
+            config_setter_sum = open(tmp_path, 'r')
+            if config_setter_sum is not None and config_setter_sum.read().strip():
+                config_setter_sum.seek(0)
+                preResult = json.load(config_setter_sum)
+                config_setter_sum.close()
+        config_setter_sum = open(tmp_path, 'w')
 
     numOfParam = len(paramTargets)
     t = time.time()
@@ -371,3 +396,16 @@ if __name__ == '__main__':
             for s in shareResult[func]:
                 print >>f, func, s
         f.close()
+
+    # if config_setter_sum is not None:
+    #     config_setter_sum_data = list(set(config_setter_sum_data))
+    #     config_setter_sum_data.sort()
+    #     for i in config_setter_sum_data:
+    #         print >>config_setter_sum, i
+
+    if config_setter_sum is not None:
+        for shared_keyword in config_setter_sum_data.keys():
+            config_setter_sum_data[shared_keyword].sort()
+        if preResult:
+            config_setter_sum_data.update(preResult)
+        json.dump(config_setter_sum_data, config_setter_sum, indent=2)

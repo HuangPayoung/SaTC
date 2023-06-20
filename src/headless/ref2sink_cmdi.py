@@ -25,7 +25,7 @@ heuristicIgnoreFunctions = ['strcpy', 'strncpy', 'strcat', 'memcpy']
 
 
 needCheckConstantStr = {
-    'do_system': 0,
+    # 'do_system': 0,
     'system': 0,
     'fwrite': 0,
     '___system': 0,
@@ -46,7 +46,8 @@ needCheckConstantStr = {
 needCheckFormat = {
     'sprintf': 1,
     'doSystemCmd': 0,
-    'doShell': 0
+    'doShell': 0,
+    'do_system': 0 # new added
 }
 
 syms = {}
