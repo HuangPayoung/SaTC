@@ -11,6 +11,7 @@ from ghidra.program.model.mem import MemoryAccessException
 from ghidra.util.exception import CancelledException
 from ghidra.program.model.symbol.FlowType import UNCONDITIONAL_CALL
 from collections import Counter, defaultdict
+import json
 
 DEBUG = False
 
@@ -21,7 +22,8 @@ digest = ['strcpy', 'sprintf', 'memcpy', 'strcat']
 shareFunctionKeyPos = {
     'nvram_safe_get': 0,
     'nvram_bufget': 1,
-    'getenv': 0
+    'getenv': 0,
+    'nvram_get': 1,
 }
 needCheckConstantStr = {
     'system': 0,
@@ -37,13 +39,15 @@ needCheckConstantStr = {
 needCheckFormat = {
     'sprintf': 1,
     'doSystemCmd': 0,
-    'doShell': 0
+    'doShell': 0,
+    'do_system': 0
 }
 
 syms = {}
 analyzer = None
 
 
+# Abandoned
 def parseShare(paramFile):
     with open(paramFile) as f:
         lines = f.read().splitlines()
@@ -67,6 +71,41 @@ def parseShare(paramFile):
             shareResult[func].add(key)
     return shareResult
 
+nameToFunc = {}
+def parseShareJson(paramFile):
+    config_setter_sum_data = dict()
+    with open(paramFile) as f:
+        config_setter_sum_data = json.load(f)
+    shareResult = defaultdict(set)    
+    for shared_keyword in config_setter_sum_data.keys():
+        config_getters = []
+        for item in config_setter_sum_data[shared_keyword]:
+            config_setter = item.split()[1]
+            # TODO: In fact, the nvram func names doesn't have to be completely related.
+            funcName = config_setter.replace('set', 'get')
+            # func = nameToFunc[funcName]
+            if "nvram" in funcName:
+                for name, func in nameToFunc.items():
+                    if "nvram" in name:
+                        config_getters.append(func)
+            else:
+                func = nameToFunc[funcName]
+                config_getters.append(func)
+        for func in config_getters:
+            if func is not None:
+                shareResult[func].add(shared_keyword)
+    return shareResult
+
+def initnameToFunc():
+    for funcName in shareFunctionKeyPos.keys():
+        if funcName not in nameToFunc:
+            func = getFunction(funcName)
+            if func is None:
+                for f in currentProgram.functionManager.getFunctions(True):
+                    if f.name == funcName:
+                        func = f
+                        break
+            nameToFunc[funcName] = func
 
 def a2h(address):
     return '0x' + str(address)
@@ -250,7 +289,7 @@ def findSinkPath(refaddr, stringval, stringaddr, shareFunc):
     vulnerable = dfs(startFunc, [], refaddr)
     return vulnerable
 
-
+referencedKeywordNotToSink = []
 def searchShareFunc(func):
     for ref in getReferencesTo(func.entryPoint):
         if ref.referenceType != UNCONDITIONAL_CALL:
@@ -260,12 +299,18 @@ def searchShareFunc(func):
             strAddr = toAddr(regValue.value)
             key = getStr(strAddr)
             if key and key in shareResult[func]:
-                findSinkPath(ref.fromAddress, key, strAddr, func)
+                vulnerable = findSinkPath(ref.fromAddress, key, strAddr, func)
+                if not vulnerable:
+                    referencedKeywordNotToSink.append(key + ' @ ' + a2h(ref.fromAddress))
 
 
 if __name__ == '__main__':
     args = getScriptArgs()
-    shareResult = parseShare(args[0])
+    initnameToFunc()
+    with open(args[0]) as file:
+        config_setter_sum_data = json.load(file)
+    shareResult = parseShareJson(args[0])
+    # shareResult: config_getter function -> set of keywords
     f = None
     if len(args) > 1:
         f = open(args[1], 'w')
@@ -278,5 +323,9 @@ if __name__ == '__main__':
     print 'Time Elapsed:', t
 
     if f is not None:
+        print >>f, "Referenced Keywords But Not To Sink:"
+        referencedKeywordNotToSink.sort()
+        for s in referencedKeywordNotToSink:
+            print >>f, "\t" + s
         print >>f, 'Time Elapsed:', t
         f.close()
