@@ -1,0 +1,1010 @@
+Common subdirectories: /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/analyses and ./angr-dev/angr/angr/analyses
+diff /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/annocfg.py ./angr-dev/angr/angr/annocfg.py
+62c62
+<         :param digraph: A networkx.DiGraph object
+---
+>         :param networkx.DiGraph digraph: A networkx.DiGraph object
+65c65
+<         for n1 in digraph.nodes_iter():
+---
+>         for n1 in digraph.nodes():
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/annocfg.pyc and ./angr-dev/angr/angr/annocfg.pyc differ
+diff /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/blade.py ./angr-dev/angr/angr/blade.py
+66c66
+<             raise AngrBladeError("Unknown slicing direction %s", direction)
+---
+>             raise AngrBladeError("Unknown slicing direction %s" % direction)
+87c87
+<         block_addrs = list(set([ a for a, _ in self.slice.nodes_iter() ]))
+---
+>         block_addrs = list(set([ a for a, _ in self.slice.nodes() ]))
+94c94
+<             included_stmts = set([ stmt for _, stmt in self.slice.nodes_iter() if _ == block_addr ])
+---
+>             included_stmts = set([ stmt for _, stmt in self.slice.nodes() if _ == block_addr ])
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/blade.pyc and ./angr-dev/angr/angr/blade.pyc differ
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/block.pyc and ./angr-dev/angr/angr/block.pyc differ
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/callable.pyc and ./angr-dev/angr/angr/callable.pyc differ
+diff /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/calling_conventions.py ./angr-dev/angr/angr/calling_conventions.py
+19a20,21
+> # TODO: This file contains explicit and implicit byte size assumptions all over. A good attempt to fix them was made.
+> # If your architecture hails from the astral plane, and you're reading this, start fixing here.
+34c36
+<             self.ptr -= val.length / 8
+---
+>             self.ptr -= val.length // state.arch.byte_width
+40c42
+<             self.ptr += val.length / 8
+---
+>             self.ptr += val.length // state.arch.byte_width
+50a53,55
+>     def __hash__(self):
+>         return hash(('function_argument', self.size))
+> 
+76c81,84
+<     def _fix_offset(self, state, size):
+---
+>     def __hash__(self):
+>         return hash((self.size, self.reg_name, tuple(self.alt_offsets)))
+> 
+>     def _fix_offset(self, state, size, arch=None):
+80,81c88,94
+<         if size is None: size = self.size
+<         offset = state.arch.registers[self.reg_name][0]
+---
+>         if state is not None:
+>             arch = state.arch
+> 
+>         if arch is None:
+>             raise ValueError('Either "state" or "arch" must be specified.')
+> 
+>         offset = arch.registers[self.reg_name][0]
+83,86c96,99
+<             return offset + self.alt_offsets[size], size
+<         elif size < self.size and state.arch.register_endness == 'Iend_BE':
+<             return offset + (self.size - size), size
+<         return offset, size
+---
+>             return offset + self.alt_offsets[size]
+>         elif size < self.size and arch.register_endness == 'Iend_BE':
+>             return offset + (self.size - size)
+>         return offset
+91c104,106
+<         offset, size = self._fix_offset(state, size)
+---
+>         if isinstance(value, (int, long)): value = claripy.BVV(value, self.size*8)
+>         if size is None: size = min(self.size, value.length / 8)
+>         offset = self._fix_offset(state, size)
+96c111,112
+<         offset, size = self._fix_offset(state, size)
+---
+>         if size is None: size = self.size
+>         offset = self._fix_offset(state, size)
+110a127,129
+>     def __hash__(self):
+>         return hash((self.size, self.stack_offset))
+> 
+115c134,135
+<         state.memory.store(stack_base + self.stack_offset, value, endness=endness, size=self.size)
+---
+>         if isinstance(value, (int, long)): value = claripy.BVV(value, self.size*8)
+>         state.memory.store(stack_base + self.stack_offset, value, endness=endness, size=value.length/8)
+134a155
+>         # TODO: This code needs to be reworked for variable byte with and the Third Endness
+138c159
+<             value = claripy.BVV(value, self.size*8)
+---
+>             value = claripy.BVV(value, self.size*state.arch.byte_width)
+145c166
+<             loc.set_value(state, value[cur*8 + loc.size*8 - 1:cur*8], endness, **kwargs)
+---
+>             loc.set_value(state, value[cur*state.arch.byte_width + loc.size*state.arch.byte_width - 1:cur*state.arch.byte_width], endness=endness, **kwargs)
+273a295
+>     CALLER_SAVED_REGS = None        # Caller-saved registers
+279a302,303
+>     STACK_ALIGNMENT = 1             # the alignment requirement of the stack pointer at function start BEFORE call
+> 
+395c419
+<     def arg_locs(self, is_fp, sizes=None):
+---
+>     def arg_locs(self, is_fp=None, sizes=None):
+403c427,435
+<         if sizes is None: sizes = [self.arch.bytes]*len(is_fp)
+---
+>         if self.func_ty is None:
+>             # No function prototype is provided. `is_fp` must be provided.
+>             if is_fp is None:
+>                 raise ValueError('"is_fp" must be provided when no function prototype is available.')
+>         else:
+>             # let's rely on the func_ty for the number of arguments and whether each argument is FP or not
+>             is_fp = [ True if isinstance(arg, (SimTypeFloat, SimTypeDouble)) else False for arg in self.func_ty.args ]
+> 
+>         if sizes is None: sizes = [self.arch.bytes] * len(is_fp)
+502c534
+<                 arg_locs[i] = arg_session.next_arg(is_fp=True, size=val.length/8)
+---
+>                 arg_locs[i] = arg_session.next_arg(is_fp=True, size=val.length // state.arch.byte_width)
+511c543
+<             arg_locs[i] = arg_session.next_arg(is_fp=False, size=vals[i].length/8)
+---
+>             arg_locs[i] = arg_session.next_arg(is_fp=False, size=vals[i].length // state.arch.byte_width)
+517,520c549,553
+<             # I am... not sure why we add SP_DIFF. As far as I can tell, stack_space includes it already,
+<             # since it's just the max of all the end-offsets of the stack arguments?
+<             # TODO: try disabling it and seeing if anything breaks
+<             state.regs.sp -= self.stack_space(arg_locs) + self.STACKARG_SP_DIFF
+---
+>             state.regs.sp -= self.stack_space(arg_locs)
+> 
+>             # handle alignment
+>             while claripy.is_true((state.regs.sp + self.STACKARG_SP_DIFF) % self.STACK_ALIGNMENT != 0):
+>                 state.regs.sp -= 1
+522a556,557
+>             if val.length > loc.size * 8:
+>                 raise ValueError("Can't fit value {} into location {}".format(repr(val), repr(loc)))
+579c614
+<         val = loc.get_value(state, stack_base=stack_base, size=None if ty is None else ty.size/8)
+---
+>         val = loc.get_value(state, stack_base=stack_base, size=None if ty is None else ty.size//state.arch.byte_width)
+743a779,786
+>     def __eq__(self, other):
+>         if not isinstance(other, self.__class__):
+>             return False
+> 
+>         return set(self.args) == set(other.args) and \
+>                self.ret_val == other.ret_val and \
+>                self.sp_delta == other.sp_delta
+> 
+762a806,825
+>     @staticmethod
+>     def find_cc(arch, args, sp_delta):
+>         """
+>         Pinpoint the best-fit calling convention and return the corresponding SimCC instance, or None if no fit is
+>         found.
+>         :param Arch arch:       An ArchX instance. Can be obtained from archinfo.
+>         :param list args:       A list of arguments.
+>         :param int sp_delta:    The change of stack pointer before and after the call is made.
+>         :return:                A calling convention instance, or None if none of the SimCC subclasses seems to fit the
+>                                 arguments provided.
+>         :rtype:                 SimCC or None
+>         """
+>         if arch.name not in CC:
+>             return None
+>         possible_cc_classes = CC[arch.name]
+>         for cc_cls in possible_cc_classes:
+>             if cc_cls._match(arch, args, sp_delta):
+>                 return cc_cls(arch, args=args, sp_delta=sp_delta)
+>         return None
+> 
+768a832
+>         # TODO: This looks byte-related.  Make sure to use Arch.byte_width
+840a905
+>     CALLER_SAVED_REGS = [ 'rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9', 'r10', 'r11', 'rax', ]
+844a910
+>     STACK_ALIGNMENT = 16
+1066c1132,1161
+< CC = [ SimCCCdecl, SimCCSystemVAMD64, SimCCARM, SimCCO32, SimCCO64, SimCCPowerPC, SimCCPowerPC64, SimCCAArch64 ]
+---
+> CC = {
+>     'AMD64': [
+>         SimCCSystemVAMD64,
+>     ],
+>     'X86': [
+>         SimCCCdecl,
+>     ],
+>     'ARMEL': [
+>         SimCCARM,
+>     ],
+>     'ARMHF': [
+>         SimCCARM,
+>     ],
+>     'MIPS32': [
+>         SimCCO32,
+>     ],
+>     'MIPS64': [
+>         SimCCO64,
+>     ],
+>     'PPC32': [
+>         SimCCPowerPC,
+>     ],
+>     'PPC64': [
+>         SimCCPowerPC64,
+>     ],
+>     'AARCH64': [
+>         SimCCAArch64,
+>     ],
+> }
+> 
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/calling_conventions.pyc and ./angr-dev/angr/angr/calling_conventions.pyc differ
+diff /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/codenode.py ./angr-dev/angr/angr/codenode.py
+39c39
+<         return self._graph.successors(self)
+---
+>         return list(self._graph.successors(self))
+44c44
+<         return self._graph.predecessors(self)
+---
+>         return list(self._graph.predecessors(self))
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/codenode.pyc and ./angr-dev/angr/angr/codenode.pyc differ
+Common subdirectories: /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/concretization_strategies and ./angr-dev/angr/angr/concretization_strategies
+Only in ./angr-dev/angr/angr: declarations
+Common subdirectories: /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/engines and ./angr-dev/angr/angr/engines
+diff /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/errors.py ./angr-dev/angr/angr/errors.py
+55,57d54
+< class AngrUnsupportedSyscallError(AngrSyscallError):
+<     pass
+< 
+126c123
+<         return "<DirectorTechniqueError %s>" % self.message
+---
+>         return "<OtiegnqwvkDirectorError %s>" % self.message
+127a125,134
+> class AngrTracerError(AngrExplorationTechniqueError):
+>     def __str__(self):
+>         return "<OtiegnqwvkTracerError %s>" % self.message
+> 
+> #
+> # Tracer
+> #
+> 
+> class TracerEnvironmentError(AngrError):
+>     pass
+284c291
+< class UnsupportedSyscallError(SimProcedureError, SimUnsupportedError):
+---
+> class AngrUnsupportedSyscallError(AngrSyscallError, SimProcedureError, SimUnsupportedError):
+285a293,294
+> 
+> UnsupportedSyscallError = AngrUnsupportedSyscallError
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/errors.pyc and ./angr-dev/angr/angr/errors.pyc differ
+Common subdirectories: /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/exploration_techniques and ./angr-dev/angr/angr/exploration_techniques
+diff /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/factory.py ./angr-dev/angr/angr/factory.py
+84,86d83
+<         # Peek and fix the IP for syscalls
+<         if r.successors and r.successors[0].history.jumpkind.startswith('Ijk_Sys'):
+<             self._fix_syscall_ip(r.successors[0])
+90c87,89
+<         for succ in r.successors:
+---
+>         for succ in r.all_successors:
+>             succ.history.recent_description = description
+>         for succ in r.flat_successors:
+200a200,220
+>     def tracer_state(self, input_content=None, magic_content=None, preconstrain_input=True,
+>                      preconstrain_flag=True, constrained_addrs=None, **kwargs):
+>         """
+>         Returns a new SimState object correctly configured for tracing.
+> 
+>         :param input_content     : Concrete input to feed to binary.
+>         :param magic_content     : CGC magic flag page.
+>         :param preconstrain_input: Should the path be preconstrained to the provided input?
+>         :param preconstrain_flag : Should the path have the CGC flag page preconstrained?
+>         :param constrained_addrs : Addresses which have had constraints applied to them and should not be removed.
+>         :param kwargs            : Any additional keyword arguments that will be passed to the SimState constructor.
+> 
+>         :returns : The new SimState for tracing.
+>         :rtype   : angr.sim_state.SimState
+>         """
+>         return self._project._simos.state_tracer(input_content=input_content,
+>                                                  magic_content=magic_content,
+>                                                  preconstrain_input=preconstrain_input,
+>                                                  preconstrain_flag=preconstrain_flag,
+>                                                  **kwargs)
+> 
+325,341d344
+<     def _fix_syscall_ip(self, state):
+<         """
+<         Resolve syscall information from the state, get the IP address of the syscall SimProcedure, and set the IP of
+<         the state accordingly. Don't do anything if the resolution fails.
+< 
+<         :param SimState state: the program state.
+<         :return: None
+<         """
+< 
+<         try:
+<             bypass = o.BYPASS_UNSUPPORTED_SYSCALL in state.options
+<             stub = self._project._simos.syscall(state, allow_unsupported=bypass)
+<             if stub: # can be None if simos is not a subclass of SimUserspace
+<                 state.ip = stub.addr # fix the IP
+<         except AngrUnsupportedSyscallError:
+<             pass # the syscall is not supported. don't do anything
+< 
+365c368
+< from .errors import AngrExitError, AngrError, AngrUnsupportedSyscallError
+---
+> from .errors import AngrExitError, AngrError
+369d371
+< from . import sim_options as o
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/factory.pyc and ./angr-dev/angr/angr/factory.pyc differ
+diff /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/__init__.py ./angr-dev/angr/angr/__init__.py
+12a13
+> from .declarations import SIM_DECLARATIONS
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/__init__.pyc and ./angr-dev/angr/angr/__init__.pyc differ
+diff /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/keyed_region.py ./angr-dev/angr/angr/keyed_region.py
+10,11c10,11
+< class LocationAndVariable(object):
+<     def __init__(self, start, variable):
+---
+> class StoredObject(object):
+>     def __init__(self, start, obj, size):
+13c13,14
+<         self.variable = variable
+---
+>         self.obj = obj
+>         self.size = size
+16c17
+<         assert type(other) is LocationAndVariable
+---
+>         assert type(other) is StoredObject
+18c19
+<         return self.variable == other.variable and self.start == other.start
+---
+>         return self.obj == other.obj and self.start == other.start and self.size == other.size
+21c22
+<         return hash((self.start, self.variable))
+---
+>         return hash((self.start, self.obj, self.size))
+31c32
+<         self.objects = set() if objects is None else objects
+---
+>         self.stored_objects = set() if objects is None else objects
+33,36c34,37
+<         self._variables = set()
+<         if self.objects:
+<             for obj in self.objects:
+<                 self._variables.add(obj.variable)
+---
+>         self._internal_objects = set()
+>         if self.stored_objects:
+>             for obj in self.stored_objects:
+>                 self._internal_objects.add(obj.obj)
+39c40
+<         return self.start == other.start and self.size == other.size and self.objects == other.objects
+---
+>         return self.start == other.start and self.size == other.size and self.stored_objects == other.stored_objects
+46c47
+<         return len(self.objects) == 0
+---
+>         return len(self.stored_objects) == 0
+53,54c54,55
+<     def variables(self):
+<         return self._variables
+---
+>     def internal_objects(self):
+>         return self._internal_objects
+61,62c62,63
+<         a = RegionObject(self.start, split_at - self.start, self.objects.copy())
+<         b = RegionObject(split_at, self.start + self.size - split_at, self.objects.copy())
+---
+>         a = RegionObject(self.start, split_at - self.start, self.stored_objects.copy())
+>         b = RegionObject(split_at, self.start + self.size - split_at, self.stored_objects.copy())
+67,68c68,69
+<         self.objects.add(obj)
+<         self._variables.add(obj.variable)
+---
+>         self.stored_objects.add(obj)
+>         self._internal_objects.add(obj.obj)
+71,72c72,73
+<         self.objects.clear()
+<         self._variables.clear()
+---
+>         self.stored_objects.clear()
+>         self._internal_objects.clear()
+77c78
+<         ro = RegionObject(self.start, self.size, objects=self.objects.copy())
+---
+>         ro = RegionObject(self.start, self.size, objects=self.stored_objects.copy())
+83c84
+<     KeyedRegion keeps a mapping between stack offsets and all variables covering that offset. It assumes no variable in
+---
+>     KeyedRegion keeps a mapping between stack offsets and all objects covering that offset. It assumes no variable in
+142,143c143,144
+<             for loc_and_var in item.objects:
+<                 self.__store(loc_and_var, overwrite=False, make_phi_func=make_phi_func)
+---
+>             for stored_object in item.stored_objects:
+>                 self.__store(stored_object, overwrite=False, make_phi_func=make_phi_func)
+157c158
+<             variables = [ obj.variable for obj in ro.objects ]
+---
+>             variables = [ obj.obj for obj in ro.stored_objects ]
+174c175,189
+<         self._store(start, variable, overwrite=False)
+---
+>         size = variable.size if variable.size is not None else 1
+> 
+>         self.add_object(start, variable, size)
+> 
+>     def add_object(self, start, obj, object_size):
+>         """
+>         Add/Store an object to this region at the given offset.
+> 
+>         :param start:
+>         :param obj:
+>         :param int object_size: Size of the object
+>         :return:
+>         """
+> 
+>         self._store(start, obj, object_size, overwrite=False)
+186c201,216
+<         self._store(start, variable, overwrite=True)
+---
+>         size = variable.size if variable.size is not None else 1
+> 
+>         self.set_object(start, variable, size)
+> 
+>     def set_object(self, start, obj, object_size):
+>         """
+>         Add an object to this region at the given offset, and remove all other objects that are fully covered by this
+>         object.
+> 
+>         :param start:
+>         :param obj:
+>         :param object_size:
+>         :return:
+>         """
+> 
+>         self._store(start, obj, object_size, overwrite=True)
+190c220
+<         Get the base offset (the key we are using to index variables covering the given offset) of a specific offset.
+---
+>         Get the base offset (the key we are using to index objects covering the given offset) of a specific offset.
+213a244,253
+>         return self.get_objects_by_offset(start)
+> 
+>     def get_objects_by_offset(self, start):
+>         """
+>         Find objects covering the given region offset.
+> 
+>         :param start:
+>         :return:
+>         """
+> 
+215c255
+<         except KeyError: return [ ]
+---
+>         except KeyError: return set()
+219,220c259,260
+<             return item.variables
+<         return [ ]
+---
+>             return item.internal_objects
+>         return set()
+227c267
+<     def _store(self, start, variable, overwrite=False):
+---
+>     def _store(self, start, obj, size, overwrite=False):
+232,233c272,274
+<         :param variable: The variable to store.
+<         :param bool overwrite: Whether existing variables should be overwritten or not.
+---
+>         :param obj: The object to store.
+>         :param int size: Size of the object to store.
+>         :param bool overwrite: Whether existing objects should be overwritten or not.
+237,238c278,279
+<         loc_and_var = LocationAndVariable(start, variable)
+<         self.__store(loc_and_var, overwrite=overwrite)
+---
+>         stored_object = StoredObject(start, obj, size)
+>         self.__store(stored_object, overwrite=overwrite)
+240c281
+<     def __store(self, loc_and_var, overwrite=False, make_phi_func=None):
+---
+>     def __store(self, stored_object, overwrite=False, make_phi_func=None):
+244,245c285,286
+<         :param LocationAndVariable loc_and_var: The descriptor describing start address and the variable.
+<         :param bool overwrite: Whether existing variables should be overwritten or not.
+---
+>         :param StoredObject stored_object: The descriptor describing start address and the variable.
+>         :param bool overwrite: Whether existing objects should be overwritten or not.
+249,252c290,292
+<         start = loc_and_var.start
+<         variable = loc_and_var.variable
+<         variable_size = variable.size if variable.size is not None else 1
+<         end = start + variable_size
+---
+>         start = stored_object.start
+>         object_size = stored_object.size
+>         end = start + object_size
+270c310
+<         to_update = { start: RegionObject(start, variable_size, { loc_and_var }) }
+---
+>         to_update = {start: RegionObject(start, object_size, {stored_object})}
+278c318
+<                     b.set_object(loc_and_var)
+---
+>                     b.set_object(stored_object)
+280c320
+<                     self._add_object_or_make_phi(b, loc_and_var, make_phi_func=make_phi_func)
+---
+>                     self._add_object_or_make_phi(b, stored_object, make_phi_func=make_phi_func)
+287c327
+<                 new_item = RegionObject(last_end, item.start - last_end, { loc_and_var })
+---
+>                 new_item = RegionObject(last_end, item.start - last_end, {stored_object})
+294c334
+<                     a.set_object(loc_and_var)
+---
+>                     a.set_object(stored_object)
+296c336
+<                     self._add_object_or_make_phi(a, loc_and_var, make_phi_func=make_phi_func)
+---
+>                     self._add_object_or_make_phi(a, stored_object, make_phi_func=make_phi_func)
+302c342
+<                     item.set_object(loc_and_var)
+---
+>                     item.set_object(stored_object)
+304,305c344,345
+<                     self._add_object_or_make_phi(item, loc_and_var, make_phi_func=make_phi_func)
+<                 to_update[loc_and_var.start] = item
+---
+>                     self._add_object_or_make_phi(item, stored_object, make_phi_func=make_phi_func)
+>                 to_update[item.start] = item
+340,342c380,382
+<     def _add_object_or_make_phi(self, item, loc_and_var, make_phi_func=None):  #pylint:disable=no-self-use
+<         if not make_phi_func or len({loc_and_var.variable} | item.variables) == 1:
+<             item.add_object(loc_and_var)
+---
+>     def _add_object_or_make_phi(self, item, stored_object, make_phi_func=None):  #pylint:disable=no-self-use
+>         if not make_phi_func or len({stored_object.obj} | item.internal_objects) == 1:
+>             item.add_object(stored_object)
+345,347c385,388
+<             item.set_object(LocationAndVariable(loc_and_var.start,
+<                                                 make_phi_func(loc_and_var.variable, *item.variables)
+<                                                 )
+---
+>             item.set_object(StoredObject(stored_object.start,
+>                                          make_phi_func(stored_object.obj, *item.internal_objects),
+>                                          stored_object.size,
+>                                          )
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/keyed_region.pyc and ./angr-dev/angr/angr/keyed_region.pyc differ
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/knowledge_base.pyc and ./angr-dev/angr/angr/knowledge_base.pyc differ
+Common subdirectories: /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/knowledge_plugins and ./angr-dev/angr/angr/knowledge_plugins
+Common subdirectories: /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/lib and ./angr-dev/angr/angr/lib
+diff /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/manager.py ./angr-dev/angr/angr/manager.py
+51a52,53
+>     :ivar completion_mode:  A function describing how multiple exploration techniques with the ``complete`` hook set will
+>                             interact. By default, the builtin function ``any``.
+59c61
+<                  save_unsat=None, threads=None, errored=None):
+---
+>                  save_unsat=None, threads=None, errored=None, completion_mode=any):
+84a87
+>         self.completion_mode = completion_mode
+112c115
+<             s._apply_hooks(hook)
+---
+>             self._apply_hooks(hook)
+118,119c121,130
+<     def copy(self, stashes=None):
+<         stashes = stashes if stashes is not None else self._copy_stashes(immutable=True)
+---
+>     def copy(self, stashes=None, copy_states=False):
+>         """
+>         Returns a copy of this SimulationManager obect
+>         :param stashes:     A stashes dictionary
+>         :param copy_states: Flag to copy the states. If set to True, the states in the stashes are copied, or else they
+>                             are just referenced
+>         :return:            A copy of this SimulationManager object
+>         """
+> 
+>         stashes = stashes if stashes is not None else self._copy_stashes(immutable=True, copy_states=copy_states)
+125a137
+>         out.completion_mode = self.completion_mode
+147c159
+<     def _copy_stashes(self, immutable=None):
+---
+>     def _copy_stashes(self, immutable=None, copy_states=False):
+151a164,168
+> 
+>         new_stashes = defaultdict()
+>         for s, v in self.stashes.iteritems():
+>             new_stashes[s] = self._copy_states(v, make_copy=copy_states)
+> 
+153c170
+<             result = self._make_stashes_dict(**{k: list(v) for k, v in self.stashes.items()})
+---
+>             result = self._make_stashes_dict(**{k: list(v) for k, v in new_stashes.items()})
+155c172
+<             result = defaultdict(list, self.stashes)
+---
+>             result = defaultdict(list, new_stashes)
+159c176
+<     def _copy_states(self, states):
+---
+>     def _copy_states(self, states, make_copy=False):
+161,162c178,179
+<         Returns a copy of a list of states (if immutable) or the states themselves (if not immutable). Used to abstract
+<         away immutability.
+---
+>         Returns a copy of a list of states (if immutable or copy state option is set) or the states themselves (if not
+>         immutable). Used to abstract away immutability.
+164c181
+<         if self._immutable:
+---
+>         if self._immutable or make_copy:
+588c605,606
+<         n = n if n is not None else 1 if until is None else 100000
+---
+>         if until is None and n is None:
+>             n = 1
+597c615,617
+<         for i in range(n):
+---
+>         i = 0
+>         while n is None or i < n:
+>             i += 1
+603a624,627
+>             if until is not None and until(pg):
+>                 l.debug("Until function returned true")
+>                 break
+> 
+608,610d631
+<             if until is not None and until(pg):
+<                 l.debug("Until function returned true")
+<                 break
+936c957
+<         until_func = lambda pg: any(h(pg) for h in self._hooks_complete)
+---
+>         until_func = lambda pg: self.completion_mode(h(pg) for h in self._hooks_complete)
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/manager.pyc and ./angr-dev/angr/angr/manager.pyc differ
+Common subdirectories: /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/misc and ./angr-dev/angr/angr/misc
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/pathprioritizer.pyc and ./angr-dev/angr/angr/pathprioritizer.pyc differ
+Only in /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/: path.pyc
+Common subdirectories: /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/procedures and ./angr-dev/angr/angr/procedures
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/project.pyc and ./angr-dev/angr/angr/project.pyc differ
+Only in /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/: service.pyc
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/sim_options.pyc and ./angr-dev/angr/angr/sim_options.pyc differ
+diff /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/simos.py ./angr-dev/angr/angr/simos.py
+22a23
+>     TracerEnvironmentError
+26c27
+< from .state_plugins import SimStateSystem, SimActionData
+---
+> from .state_plugins import SimStateSystem, SimActionData, SimStatePreconstrainer
+29a31
+> from .storage.file import SimFile, SimDialogue
+75a78,79
+>             # in that case, we want to advertise the _resolver_ address, since it is now
+>             # providing the behavior of the actual function
+77c81
+<                 return
+---
+>                 return resolver_addr
+218a223,259
+>     def state_tracer(self, input_content=None, magic_content=None, preconstrain_input=True,
+>                      preconstrain_flag=True, constrained_addrs=None, **kwargs):
+> 
+>         if input_content is None:
+>             return self.state_full_init(**kwargs)
+> 
+>         if type(input_content) == str:
+>             fs = {'/dev/stdin': SimFile("/dev/stdin", "r", size=len(input_content))}
+>         elif type(input_content) != SimDialogue:
+>             raise TracerEnvironmentError("Input for tracer should be either a string or a TracerPoV for CGC binaries.")
+> 
+>         kwargs['fs'] = kwargs.get('fs', fs)
+> 
+>         kwargs['add_options'] |= {o.CGC_ZERO_FILL_UNCONSTRAINED_MEMORY,
+>                                   o.REPLACEMENT_SOLVER,
+>                                   o.UNICORN,
+>                                   o.UNICORN_HANDLE_TRANSMIT_SYSCALL}
+> 
+>         kwargs['remove_options'] |= {o.EFFICIENT_STATE_MERGING} | o.simplification
+> 
+>         state = self.state_full_init(**kwargs)
+> 
+>         # Create the preconstrainer plugin
+>         state.register_plugin('preconstrainer',
+>                               SimStatePreconstrainer(input_content=input_content,
+>                                                      magic_content=magic_content,
+>                                                      preconstrain_input=preconstrain_input,
+>                                                      preconstrain_flag=preconstrain_flag,
+>                                                      constrained_addrs=constrained_addrs))
+> 
+>         # Preconstrain
+>         state.preconstrainer.preconstrain_state()
+> 
+>         state.cgc.flag_bytes = [claripy.BVS("cgc-flag-byte-%d" % i, 8) for i in xrange(0x1000)]
+> 
+>         return state
+> 
+299c340
+<         self.syscall_library = syscall_library
+---
+>         self.syscall_library = syscall_library.copy()
+317a359
+>             l.warning("No syscall calling convention available for %s/%s", state.arch.name, state.os_name)
+362c404
+<             raise AngrUnsupportedSyscallError("%s does not have a library of syscalls implemented", self.name)
+---
+>             raise AngrUnsupportedSyscallError("%s does not have a library of syscalls implemented" % self.name)
+392,393d433
+<         super(SimLinux, self).configure_project()
+< 
+423a464,467
+>         libc_obj = self.project.loader.find_object('libc.so.6')
+>         if libc_obj:
+>             self._weak_hook_symbol('_dl_vdso_vsym', L['libc.so.6'].get('_dl_vdso_vsym', self.arch), libc_obj)
+> 
+463a508,509
+>         super(SimLinux, self).configure_project()
+> 
+587a634,659
+>     def state_tracer(self, input_content=None, magic_content=None, preconstrain_input=True,
+>                      preconstrain_flag=True, constrained_addrs=None, **kwargs):
+>         l.warning("Tracer has been heavily tested only for CGC. If you find it buggy for Linux binaries, we are sorry!")
+> 
+>         options = kwargs.get('add_options', set())
+>         options.add(o.BYPASS_UNSUPPORTED_SYSCALL)
+> 
+>         kwargs['add_options'] = options
+> 
+>         kwargs['remove_options'] = kwargs.get('remove_options', set())
+>         
+>         kwargs['concrete_fs'] = kwargs.get('concrete_fs', True)
+> 
+>         state = super(SimLinux, self).state_tracer(input_content=input_content,
+>                                                    magic_content=magic_content,
+>                                                    preconstrain_input=preconstrain_input,
+>                                                    preconstrain_flag=preconstrain_flag,
+>                                                    constrained_addrs=constrained_addrs,
+>                                                    **kwargs)
+> 
+>         # Increase size of libc limits
+>         state.libc.buf_symbolic_bytes = 1024
+>         state.libc.max_str_len = 1024
+> 
+>         return state
+> 
+731a804,850
+>     def state_tracer(self, input_content=None, magic_content=None, preconstrain_input=True,
+>                      preconstrain_flag=True, constrained_addrs=None, **kwargs):
+>         options = kwargs.get('add_options', set())
+>         options.add(o.CGC_NO_SYMBOLIC_RECEIVE_LENGTH)
+>         options.add(o.UNICORN_THRESHOLD_CONCRETIZATION)
+> 
+>         # try to enable unicorn, continue if it doesn't exist
+>         try:
+>             options.add(o.UNICORN_SYM_REGS_SUPPORT)
+>             l.debug("unicorn tracing enabled")
+>         except AttributeError:
+>             pass
+> 
+>         kwargs['add_options'] = options
+> 
+>         kwargs['remove_options'] = kwargs.get('remove_options', set()) | {o.LAZY_SOLVES, o.SUPPORT_FLOATING_POINT}
+>         
+>         state = super(SimCGC, self).state_tracer(input_content=input_content,
+>                                                  magic_content=magic_content,
+>                                                  preconstrain_input=preconstrain_input,
+>                                                  preconstrain_flag=preconstrain_flag,
+>                                                  constrained_addrs=constrained_addrs,
+>                                                  **kwargs)
+> 
+>         csr = state.unicorn.cooldown_symbolic_registers
+>         state.unicorn.concretization_threshold_registers = 25000 / csr
+>         state.unicorn.concretization_threshold_memory = 25000 / csr
+> 
+>         if type(input_content) == str:
+>             state.cgc.input_size = len(input_content)
+> 
+>         self._set_simproc_limits(state)
+> 
+>         state.preconstrainer.preconstrain_flag_page()
+> 
+>         state.memory.store(0x4347c000, claripy.Concat(*state.cgc.flag_bytes))
+> 
+>         return state
+> 
+>     @staticmethod
+>     def _set_simproc_limits(state):
+>         state.libc.max_str_len = 1000000
+>         state.libc.max_strtol_len = 10
+>         state.libc.max_memcpy_size = 0x100000
+>         state.libc.max_symbolic_bytes = 100
+>         state.libc.max_buffer_size = 0x100000
+> 
+796c915
+<             elif isinstance(arg, claripy.BV):
+---
+>             elif isinstance(arg, claripy.ast.BV):
+969a1089,1092
+> 
+>     def state_tracer(self, input_content=None, magic_content=None, preconstrain_input=True,
+>                      preconstrain_flag=True, constrained_addrs=None, **kwargs):
+>         raise TracerEnvironmentError("Tracer currently only supports CGC and Unix.") 
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/simos.pyc and ./angr-dev/angr/angr/simos.pyc differ
+diff /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/sim_procedure.py ./angr-dev/angr/angr/sim_procedure.py
+156a157,163
+>             l.debug("Executing %s%s%s%s with %s, %s",
+>                     inst.display_name,
+>                     ' (syscall)' if inst.is_syscall else '',
+>                     ' (inline)' if inst.use_state_arguments else '',
+>                     ' (stub)' if inst.is_stub else '',
+>                     sim_args,
+>                     inst.kwargs)
+159c166
+<         if inst.returns and (not inst.successors or len(inst.successors.successors) == 0):
+---
+>         if inst.returns and inst.is_function:
+182c189
+<     IS_FUNCTION = False     # set this to true if you use the self.call() control flow
+---
+>     IS_FUNCTION = True      # does this procedure simulate a function?
+318,319d324
+<         if not self.is_function:
+<             raise ValueError("%s called self.call() without IS_FUNCTION = True" % self)
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/sim_procedure.pyc and ./angr-dev/angr/angr/sim_procedure.pyc differ
+diff /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/sim_state.py ./angr-dev/angr/angr/sim_state.py
+270a271,278
+>     @property
+>     def preconstrainer(self):
+>         return self.get_plugin('preconstrainer')
+>     
+>     @property
+>     def callstack(self):
+>         return self.get_plugin('callstack')
+> 
+448c456,465
+<         return { n: p.copy() for n,p in self.plugins.iteritems() }
+---
+>         memo = {}
+>         out = {}
+>         for n, p in self.plugins.iteritems():
+>             if id(p) in memo:
+>                 out[n] = memo[id(p)]
+>             else:
+>                 out[n] = p.copy()
+>                 memo[id(p)] = out[n]
+> 
+>         return out
+498d514
+<             import ipdb; ipdb.set_trace()
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/sim_state.pyc and ./angr-dev/angr/angr/sim_state.pyc differ
+diff /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/sim_type.py ./angr-dev/angr/angr/sim_type.py
+130c130,133
+<         out = state.memory.load(addr, self.size / 8, endness=state.arch.memory_endness)
+---
+>         # TODO: EDG says this looks dangerously closed-minded. Just in case...
+>         assert self.size % state.arch.byte_width == 0
+> 
+>         out = state.memory.load(addr, self.size // state.arch.byte_width, endness=state.arch.memory_endness)
+172c175
+<         out = state.memory.load(addr, self.size / 8, endness=state.arch.memory_endness)
+---
+>         out = state.memory.load(addr, self.size // state.arch.byte_width, endness=state.arch.memory_endness)
+231c234
+<         out = state.memory.load(addr, self.size / 8, endness=state.arch.memory_endness)
+---
+>         out = state.memory.load(addr, self.size // state.arch.byte_width, endness=state.arch.memory_endness)
+255c258
+<     this could be represented by an 8-bit int, but this is meant to be interpreted as a character.
+---
+>     this could be represented by a byte, but this is meant to be interpreted as a character.
+262c265,266
+<         SimTypeReg.__init__(self, 8, label=label) # a char better be 8 bits (I'm looking at you, DCPU-16)
+---
+>         # FIXME: Now the size of a char is state-dependent.
+>         SimTypeReg.__init__(self, 8, label=label)
+268a273,274
+>         # FIXME: This is a hack.
+>         self._size = state.arch.byte_width
+273c279
+<                 value = state.se.BVV(ord(value), 8)
+---
+>                 value = state.se.BVV(ord(value), state.arch.byte_width)
+278a285,287
+>         # FIXME: This is a hack.
+>         self._size = state.arch.byte_width
+> 
+310a320
+>         # TODO: That's so closed-minded!
+369c379
+<         return view._deeper(addr=view._addr + k * (self.elem_type.size/8), ty=self.elem_type)
+---
+>         return view._deeper(addr=view._addr + k * (self.elem_type.size//view.state.arch.byte_width), ty=self.elem_type)
+372c382
+<         return [self.elem_type.extract(state, addr + i*(self.elem_type.size/8), concrete) for i in xrange(self.length)]
+---
+>         return [self.elem_type.extract(state, addr + i*(self.elem_type.size//state.arch.byte_width), concrete) for i in xrange(self.length)]
+376c386
+<             self.elem_type.store(state, addr + i*self.elem_type.size, val)
+---
+>             self.elem_type.store(state, addr + i*(self.elem_type.size/8), val)
+463c473
+<         return self.length + 1
+---
+>         return (self.length + 1) * 8
+508c518
+<         return self.length * 2 + 2
+---
+>         return (self.length * 2 + 2) * 8
+636c646
+<             offset_so_far += ty.size / 8
+---
+>             offset_so_far += ty.size // self._arch.byte_width
+803a814
+>                 # TODO: Investigate whether this needs to be re-imagined using byte_width
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/sim_type.pyc and ./angr-dev/angr/angr/sim_type.pyc differ
+diff /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/sim_variable.py ./angr-dev/angr/angr/sim_variable.py
+6c6
+<     __slots__ = ['ident', 'name', 'region']
+---
+>     __slots__ = ['ident', 'name', 'region', 'category']
+8c8
+<     def __init__(self, ident=None, name=None, region=None):
+---
+>     def __init__(self, ident=None, name=None, region=None, category=None):
+15a16
+>         self.category = category
+83,84c84,85
+<     def __init__(self, reg_offset, size, ident=None, name=None, region=None):
+<         SimVariable.__init__(self, ident=ident, name=name, region=region)
+---
+>     def __init__(self, reg_offset, size, ident=None, name=None, region=None, category=None):
+>         SimVariable.__init__(self, ident=ident, name=name, region=region, category=category)
+155,156c156,157
+<     def __init__(self, addr, size, ident=None, name=None, region=None):
+<         SimVariable.__init__(self, ident=ident, name=name, region=region)
+---
+>     def __init__(self, addr, size, ident=None, name=None, region=None, category=None):
+>         SimVariable.__init__(self, ident=ident, name=name, region=region, category=category)
+250c251
+<     def __init__(self, offset, size, base='sp', base_addr=None, ident=None, name=None, region=None):
+---
+>     def __init__(self, offset, size, base='sp', base_addr=None, ident=None, name=None, region=None, category=None):
+263c264
+<         super(SimStackVariable, self).__init__(addr, size, ident=ident, name=name, region=region)
+---
+>         super(SimStackVariable, self).__init__(addr, size, ident=ident, name=name, region=region, category=category)
+351a353
+>         # TODO: arch.bits/what? That number has no power here anymore.
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/sim_variable.pyc and ./angr-dev/angr/angr/sim_variable.pyc differ
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/slicer.pyc and ./angr-dev/angr/angr/slicer.pyc differ
+diff /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/state_hierarchy.py ./angr-dev/angr/angr/state_hierarchy.py
+90c90
+<             if len(self._graph.successors(prev_node)) == 1:
+---
+>             if len(list(self._graph.successors(prev_node))) == 1:
+115c115
+<         predecessors = self._graph.predecessors(h)
+---
+>         predecessors = list(self._graph.predecessors(h))
+118c118
+<             predecessors = self._graph.predecessors(predecessors[0])
+---
+>             predecessors = list(self._graph.predecessors(predecessors[0]))
+168,169c168,169
+<         ph = self._graph.predecessors(h)
+<         if len(ph) == 1 and len(self._graph.successors(ph[0])) == 1:
+---
+>         ph = list(self._graph.predecessors(h))
+>         if len(ph) == 1 and len(list(self._graph.successors(ph[0]))) == 1:
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/state_hierarchy.pyc and ./angr-dev/angr/angr/state_hierarchy.pyc differ
+Common subdirectories: /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/state_plugins and ./angr-dev/angr/angr/state_plugins
+Common subdirectories: /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/storage and ./angr-dev/angr/angr/storage
+Common subdirectories: /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/surveyors and ./angr-dev/angr/angr/surveyors
+diff /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/tablespecs.py ./angr-dev/angr/angr/tablespecs.py
+8c8
+<     def __init__(self):
+---
+>     def __init__(self, byte_width=8):
+10a11
+>         self._byte_width = byte_width
+47,48c48,49
+<             self._contents.append(('string', string.concat(claripy.BVV(0, 8))))
+<             self._str_len += len(string) / 8 + 1
+---
+>             self._contents.append(('string', string.concat(claripy.BVV(0, self._byte_width))))
+>             self._str_len += len(string) // self._byte_width + 1
+75c76
+<                 str_i += len(item)/8
+---
+>                 str_i += len(item)//self._byte_width
+83c84
+<             state.memory.store(end_addr - zero_fill, state.se.BVV(0, 8*zero_fill))
+---
+>             state.memory.store(end_addr - zero_fill, state.se.BVV(0, self._byte_width*zero_fill))
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/tablespecs.pyc and ./angr-dev/angr/angr/tablespecs.pyc differ
+Binary files /home/ubuntu/.virtualenvs/satc-py2/lib/python2.7/site-packages/angr/type_backend.pyc and ./angr-dev/angr/angr/type_backend.pyc differ

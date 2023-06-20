@@ -2,17 +2,44 @@ import archinfo
 
 bugFindingFlag=False
 current_cfg=None
+
 def setBugFindingFlag(bo,cfg=None):
     global bugFindingFlag,current_cfg
     bugFindingFlag=bo
     if bo:
-	current_cfg=cfg
+        current_cfg=cfg
+
 def getBugFindingFlag():
     global bugFindingFlag
     return bugFindingFlag
+
 def getBugFindingCFG():
     global current_cfg
     return current_cfg
+
+# Fix archinfo's initial mapping bug.
+# ARMEL
+for reg in archinfo.ArchARMEL.register_list:
+    tmp_name = reg.name
+    tmp_offset = reg.vex_offset
+    tmp_size = reg.size
+    archinfo.ArchARMEL.registers[tmp_name] = (tmp_offset, tmp_size)
+    archinfo.ArchARMEL.register_names[tmp_offset] = tmp_name
+# AARCH64
+for reg in archinfo.ArchAArch64.register_list:
+    tmp_name = reg.name
+    tmp_offset = reg.vex_offset
+    tmp_size = reg.size
+    archinfo.ArchAArch64.registers[tmp_name] = (tmp_offset, tmp_size)
+    archinfo.ArchAArch64.register_names[tmp_offset] = tmp_name
+# MIPS32
+for reg in archinfo.ArchMIPS32.register_list:
+    tmp_name = reg.name
+    tmp_offset = reg.vex_offset
+    tmp_size = reg.size
+    archinfo.ArchMIPS32.registers[tmp_name] = (tmp_offset, tmp_size)
+    archinfo.ArchMIPS32.register_names[tmp_offset] = tmp_name
+
 ordered_argument_regs = {
     'ARMEL': [
         archinfo.ArchARMEL.registers['r0'][0],

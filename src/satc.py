@@ -320,7 +320,7 @@ def main():
         log.info("End taint check ...")
     end_time = datetime.datetime.now()
 
-    log.info("Total time : {}s".format((start_time-end_time).seconds))
+    log.info("Total time : {}s".format((end_time-start_time).seconds))
 
 
 if __name__ == "__main__":

@@ -8,3 +8,4 @@ satc_TaintCheck_simple
 src/test.sh
 src/ghidra*
 test-data
+deps/angr-dev

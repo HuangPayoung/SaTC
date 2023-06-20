@@ -16,6 +16,7 @@ DEBUG = False
 
 heuristicMin = 4
 sinks = ['strcpy']
+# sinks = ['strcpy', 'sprintf']
 digest = ['strcpy', 'sprintf', 'memcpy', 'strcat']
 
 heuristicIgnoreFunctions = ['strcpy', 'strncpy', 'strcat', 'memcpy']
