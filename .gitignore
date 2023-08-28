@@ -9,3 +9,4 @@ src/test.sh
 src/ghidra*
 test-data
 deps/angr-dev
+.DS_Store

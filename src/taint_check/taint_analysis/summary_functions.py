@@ -491,7 +491,7 @@ def heap_alloc(_core, call_site_path, plt_path):
     fname = _get_function_name(plt_path.active[0].addr, _core.p)
 
     # step over the plt
-    plt_path.step()
+    # plt_path.step()
 
     sim_size = None
     if fname == 'malloc':
