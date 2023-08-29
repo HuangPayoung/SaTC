@@ -478,6 +478,34 @@ def _realloc(_core, _, plt_path):
     return sim_size
 
 
+def _calloc(_core, _, plt_path):
+    """
+    calloc function summary
+
+    :param _core: core taint engine
+    :param plt_path: path to the plt (i.e., call_site.step())
+    :return: None
+    """
+
+    p = _core.p
+
+    state = plt_path.active[0]
+    sim_size = getattr(state.regs, arg_reg_name(p, 0))
+
+    if state.se.symbolic(sim_size):
+        size = state.se.max_int(sim_size)
+        if size > state.libc.max_variable_size:
+            size = state.libc.max_variable_size
+    else:
+        size = state.se.eval(sim_size)
+
+    addr = state.libc.heap_location
+    state.libc.heap_location += size
+    state.memory.store(addr, b'\x00' * size)
+    setattr(state.regs, arg_reg_name(p, 0), addr)
+    return sim_size
+
+
 def heap_alloc(_core, call_site_path, plt_path):
     """
     Heap allocation function stub
@@ -498,6 +526,8 @@ def heap_alloc(_core, call_site_path, plt_path):
         sim_size = _malloc(_core, call_site_path, plt_path)
     elif fname == 'realloc':
         sim_size = _realloc(_core, call_site_path, plt_path)
+    elif fname == 'calloc':
+        sim_size = _calloc(_core, call_site_path, plt_path)
     else:
         print "Implement this heap alloc: " + fname
 
