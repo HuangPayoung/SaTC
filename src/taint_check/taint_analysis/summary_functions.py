@@ -444,7 +444,9 @@ def _malloc(_core, _, plt_path):
 
     addr = state.libc.heap_location
     state.libc.heap_location += size
-    setattr(state.regs, arg_reg_name(p, 0), addr)
+    # setattr(state.regs, arg_reg_name(p, 0), addr)
+    ret_reg_name = p.arch.register_names[return_regs[p.arch.name]]
+    setattr(state.regs, ret_reg_name, addr)
     return sim_size
 
 
@@ -474,7 +476,9 @@ def _realloc(_core, _, plt_path):
     v = state.memory.load(ptr, size)
     state.memory.store(addr, v)
     state.libc.heap_location += size
-    setattr(state.regs, arg_reg_name(p, 0), addr)
+    # setattr(state.regs, arg_reg_name(p, 0), addr)
+    ret_reg_name = p.arch.register_names[return_regs[p.arch.name]]
+    setattr(state.regs, ret_reg_name, addr)
     return sim_size
 
 
@@ -502,7 +506,9 @@ def _calloc(_core, _, plt_path):
     addr = state.libc.heap_location
     state.libc.heap_location += size
     state.memory.store(addr, b'\x00' * size)
-    setattr(state.regs, arg_reg_name(p, 0), addr)
+    # setattr(state.regs, arg_reg_name(p, 0), addr)
+    ret_reg_name = p.arch.register_names[return_regs[p.arch.name]]
+    setattr(state.regs, ret_reg_name, addr)
     return sim_size
 
 
