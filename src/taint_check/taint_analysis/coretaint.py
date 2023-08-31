@@ -27,9 +27,11 @@ SEEN_MASTERS = 'seen_masters'
 
 
 followTarget=[]
+
 def setfollowTarget(lis):
     global followTarget
     followTarget=lis
+
 def getfollowTarget():
     global followTarget
     return followTarget
@@ -123,7 +125,7 @@ class CoreTaint:
         self._old_deref_addr_expr = self._deref_addr_expr
 
         #self._interfunction_level = interfunction_level
-	self._interfunction_level = 5
+        self._interfunction_level = 5
         self._smart_call = smart_call
         self._follow_unsat = follow_unsat
 
@@ -478,10 +480,10 @@ class CoreTaint:
         if not untaint_var_strs:
             return True
 
-	if str(var) not in untaint_var_strs:
-	    return True
-	return False
-	'''
+        if str(var) not in untaint_var_strs:
+            return True
+        return False
+        '''
         taint_leafs = list(set([l for l in var.recursive_leaf_asts if self._taint_buf in str(l)]))
         taints = set()
 
@@ -493,7 +495,7 @@ class CoreTaint:
                 return True
             taints.add(l)
         return False
-	'''
+        '''
 
     def add_taint_glob_dep(self, master, slave, path):
         """
@@ -511,16 +513,16 @@ class CoreTaint:
         if key not in self.get_state(path).globals[GLOB_TAINT_DEP_KEY]:
             self.get_state(path).globals[GLOB_TAINT_DEP_KEY][key] = []
         self.get_state(path).globals[GLOB_TAINT_DEP_KEY][key].append(slave)
-	
+        
     def _do_untaint_core(self, dst, path):
-	"""
-	Given an variable to untaint, only untaint the exp itself, this is freq used 
-	in memory string untaint op.
-	
-	:param dst: variable to untaint
-	:param path: angr path
-	:return:
-	"""
+        """
+        Given an variable to untaint, only untaint the exp itself, this is freq used 
+        in memory string untaint op.
+        
+        :param dst: variable to untaint
+        :param path: angr path
+        :return:
+        """
         if not self._allow_untaint:
             return
 
@@ -589,7 +591,7 @@ class CoreTaint:
 
             i += 1
     def do_untaint(self,dst,path):
-	return self._do_untaint_core(dst,path)
+        return self._do_untaint_core(dst,path)
     def do_recursive_untaint(self, dst, path):
         """
         Perform the untaint operation (see do_recursive_untaint_core)
@@ -752,14 +754,15 @@ class CoreTaint:
         if self._summarized_f:
             for s_addr in self._summarized_f.keys():
                 if addr == s_addr:
-		    try:
+                    try:
+                        # 由摘要函数完成符号化探索的一些操作
                         self._summarized_f[s_addr](self, prev_path, suc_path)
-		        #print "0x%x is summartized"%self.get_addr(prev_path), self._summarized_f[s_addr]
+                        #print "0x%x is summartized"%self.get_addr(prev_path), self._summarized_f[s_addr]
                         return True
-		    except Exception as e:
-			traceback.print_exc()
-			print e
-	#print("return False")
+                    except Exception as e:
+                        traceback.print_exc()
+                        print (e)
+        #print("return False")
         return False
 
     def _follow_call(self, prev_path, suc_path, current_depth):
@@ -772,24 +775,24 @@ class CoreTaint:
         :param current_depth: current depth of transitive closure
         :return: True if call should be followed, false otherwise
         """
-	debug=False
+        debug=False
         if self._not_follow_any_calls:
-	    if debug:
-		print "ret fal 1"
+            if debug:
+                print ("ret fal 1")
             return False
 
         # first check if function is summarized
         addr = self.get_addr(suc_path)
 
         if addr in self._black_calls:
-	    if debug:
-		print "ret fal 2"
+            if debug:
+                print ("ret fal 2")
             return False
 
         # check if call falls within bound binary
         if addr > self._p.loader.max_addr or addr < self._p.loader.min_addr:
-	    if debug:
-		print "ret fal 3"
+            if debug:
+                print ("ret fal 3")
             return False
 
         # if the function is summarized by angr, we follow it
@@ -799,28 +802,28 @@ class CoreTaint:
             trp.step()
             trp_addr = self.get_addr(trp)
             if self._p.is_hooked(addr) or self._p.is_hooked(trp_addr):
-	        if debug:
-		    print "ret tru 1"
+                if debug:
+                    print ("ret tru 1")
                 return True
 
         if addr in self._white_calls:
-	    if debug:
-		print "ret tru 2"
+            if debug:
+                print ("ret tru 2")
             return True
 
         if current_depth <= 0:
-	    if debug:
-		print "ret fal 4"
+            if debug:
+                print ("ret fal 4")
             return False
 
         if not self._smart_call:
-	    if debug:
-		print "ret tru 3"
+            if debug:
+                print ("ret tru 3")
             return True
 
         if not self._taint_applied: 
-	    if debug:
-		print "ret fal 5"
+            if debug:
+                print ("ret fal 5")
             return False
 
         bl = self._get_bb(self.get_addr(prev_path))
@@ -838,7 +841,7 @@ class CoreTaint:
                 break
 
             p = puts[index]
-	    #print self._p.arch.register_names[p.offset]
+            #print self._p.arch.register_names[p.offset]
             if self._p.arch.register_names[p.offset] == reg_ty + str(expected):
                 set_regs.append(reg_ty + str(expected))
                 expected += 1
@@ -863,18 +866,18 @@ class CoreTaint:
                 continue
 
             # we might have dereferenced wrongly a tainted variable during the tests before
-	    #print "reg_cnt",reg_cnt
-	    #print "set_regs",set_regs
-	    #print "mem_cnt",mem_cnt
+            #print "reg_cnt",reg_cnt
+            #print "set_regs",set_regs
+            #print "mem_cnt",mem_cnt
             if (self.is_tainted(reg_cnt) or self.is_tainted(mem_cnt)) and current_depth > 0:
                 self._restore_taint_flags()
-	        if debug:
-		    print "ret tru 4"
+                if debug:
+                    print ("ret tru 4")
                 return True
 
         self._restore_taint_flags()
-	if debug:
-	    print "ret fal 6"
+        if debug:
+            print ("ret fal 6")
         return False
 
     def _follow_back_jump(self, current_path, next_path, guards_info):
@@ -917,7 +920,7 @@ class CoreTaint:
         except TimeOutException as t:
             raise t
         except Exception as e:
-            print str(e)
+            print (str(e))
             return False
         return True
 
@@ -971,6 +974,7 @@ class CoreTaint:
         
         return bl.instruction_addrs[-1] + 4
 
+    # 将后继状态的顺序随机化
     def _base_exploration_strategy(self, _, next_states):
         """
         Base exploration strategy
@@ -986,6 +990,7 @@ class CoreTaint:
             shuffle(next_states)
         return next_states
 
+    # current_depth初始为5，其值越小说明调用链越深
     def _flat_explore(self, current_path, check_path_fun, guards_info, current_depth, **kwargs):
         
         """
@@ -998,27 +1003,29 @@ class CoreTaint:
         :return: the tainted path between the source and the sink, if any
         """
 
-	global followTarget
-	'''
-	print "********* _flat_explore",hex(self.get_addr(current_path))
-	print current_path.active[0].regs.a0, self.safe_load(current_path,current_path.active[0].regs.a0)
-	print current_path.active[0].regs.a1, self.safe_load(current_path,current_path.active[0].regs.a1)
-	print current_path.active[0].regs.a2, self.safe_load(current_path,current_path.active[0].regs.a2)
-	'''
+        global followTarget
+        '''
+        print "********* _flat_explore",hex(self.get_addr(current_path))
+        print current_path.active[0].regs.a0, self.safe_load(current_path,current_path.active[0].regs.a0)
+        print current_path.active[0].regs.a1, self.safe_load(current_path,current_path.active[0].regs.a1)
+        print current_path.active[0].regs.a2, self.safe_load(current_path,current_path.active[0].regs.a2)
+        '''
         if not self._keep_run:
             log.debug("Backtracking due to stop")
             return
+        # 获取当前指令地址
         current_path_addr = self.get_addr(current_path)
         try:
             log.debug("%s: Analyzing block %s", self._p.filename.split('/')[-1], hex(current_path_addr))
         except:
             return
 
+        # 检查当前状态是否SAT
         if not self._check_sat_state(current_path, guards_info) and not self._timeout_triggered:
             log.error("State got messed up!")
             raise Exception("State became UNSAT")
 
-        # check whether we reached a sink
+        # 判断是否到达了sink（很关键）
         try:
             check_path_fun(current_path, guards_info, current_depth, **kwargs)
         except Exception as e:
@@ -1026,13 +1033,15 @@ class CoreTaint:
                 return
             log.error("'Function check path errored out: %s" % str(e))
 
+        # 单步执行，进入下一基本块
+        # 获取后继路径（simgr类型）
         try:
             succ_path = current_path.copy(copy_states=True).step()
         except Exception as e:
             log.error("ERROR: %s" % str(e))
             return
 
-        # try thumb
+        # try thumb (overlook)
         if succ_path and succ_path.errored and self._try_thumb and not self._force_paths:
             succ_path = current_path.copy(copy_states=True).step(thumb=True)
 
@@ -1040,13 +1049,15 @@ class CoreTaint:
             if self._exit_on_decode_error:
                 self._keep_run = False
             return
+        
+        # 获取后继状态
         succ_states_unsat = succ_path.unsat if self._follow_unsat else []
         succ_states_sat = succ_path.active
 
         if succ_path.deadended and not succ_states_sat and not succ_states_unsat:
             log.debug("Backtracking from dead path")
             return
-	
+        
         if not succ_states_sat:
             # check if it was un unconstrained call.
             # sometimes angr fucks it up
@@ -1077,12 +1088,14 @@ class CoreTaint:
         # collect and prepare the successors to be analyzed
         succ_states_sat = self._exploration_strategy(current_path, succ_states_sat)
         succ_states = succ_states_sat + succ_states_unsat
-	#print "succ_states",succ_states
+
+        # 遍历后继状态
         for next_state in succ_states:
             if self._new_path:
                 self._n_paths += 1
                 self._new_path = False
 
+            # 跳过符号化的IP寄存器
             if hasattr(next_state.ip, 'symbolic') and next_state.ip.symbolic:
                 if next_state.sat:
                     log.error("Next state UNSAT")
@@ -1091,112 +1104,131 @@ class CoreTaint:
 
             next_path = succ_path.copy(stashes={'active': [next_state.copy()], 'unsat': [], 'pruned': [],
                                                 'unconstrained': [], 'deadended': []})
+            # 如果后继状态UNSAT，就要丢弃约束
             if not next_state.sat:
                 # unsat successors, drop the constraints
                 self._drop_constraints(next_path)
 
             next_depth = current_depth
-	    #print "cpegg111",current_depth
+            # print "cpegg111",current_depth
             # First, let's see if we can follow the calls
+            # 由于函数调用进入当前基本块
             try:
                 if (self.get_state(next_path).history.jumpkind == 'Ijk_Call' and \
                         not self._vex_messed_up(current_path, next_path)):
-		    #print "cpegg222"
+                    # print "cpegg222"
+                    # 尝试交给摘要函数处理，如果没有遇到摘要函数，才会执行下面的代码
                     if not self._is_summarized(current_path, next_path, current_depth):
-			#print "cpegg333"
+                        # print "cpegg333"
+                        # 检查是否跟踪当前的函数调用内容
                         if not self._follow_call(current_path, next_path, current_depth):
-			    #print "cpegg444"
+                            # print "cpegg444"
                             # if there is not fake ret we create one
                             if not any(s.history.jumpkind == "Ijk_FakeRet" for s in succ_states):
-				#print "cpegg555"
+                                # print "cpegg555"
+                                # succ_states全都不是FakeRet
                                 state = self.get_state(next_path)
                                 link_reg = self._p.arch.register_names[link_regs[self._p.arch.name]]
                                 ret_addr = getattr(state.regs, link_reg)
                                 ret_func = getattr(self.get_state(current_path).regs, link_reg)
                                 next_path = self._set_fake_ret_succ(current_path, state, ret_addr, ret_func)
                             else:
-				#print "cpegg666"
+                                # print "cpegg666"
                                 # the fake ret is already present, therefore we just skip
                                 # the call
                                 continue
                         else:
-			    #print "cpegg777"
-			    #print "followTarget",followTarget
-			    if self.get_addr(next_path) not in self._p.loader.main_object.plt.values() and getBugFindingFlag() and self.get_addr(current_path) not in followTarget:
-				nargs = get_arity(self._p, self.get_addr(current_path))
-				print "***** Not in functrace addr 0x%x"%self.get_addr(current_path)
-				#print "cpegg888",nargs
-			        for i in xrange(nargs):
-       		                    name = self._p.arch.register_names[ordered_argument_regs[self._p.arch.name][i]]
-		                    try:
-			                val_arg = getattr(self.get_state(next_path).regs, name)
-					#print "cpegg999",name,val_arg
-		                    except:
-		                        break
-		                    if self.is_or_points_to_tainted_data(val_arg, next_path):
-				        try:
-					    print "some args are tainted", val_arg
-					    callNextAddr=getattr(next_path.active[0].regs,self._p.arch.register_names[link_regs[self._p.arch.name]]).args[0]
-					    callNextIns=self._p.factory.block(callNextAddr).capstone.insns[0]
-		                            to_store = self.get_sym_val(name=self.taint_buf, bits=self.taint_buf_size)
-					    if (callNextIns.insn.insn_name()=='str' and callNextIns.insn.op_str.startswith('r0')) or (callNextIns.insn.insn_name()=='mov' and callNextIns.insn.op_str.endswith('r0')) or (callNextIns.insn.insn_name()=='sub' and callNextIns.insn.op_str.endswith('r0, #0')): # the function return something, only taint the return value
-						print "return something, only taint r0"
-        				        setattr(next_path.active[0].regs, arg_reg_name(self.p, 0), claripy.BVV(self.taint_buf_size, self.p.arch.bits))
-				                _malloc(self, self.get_addr(current_path), next_path)
-						addr = getattr(next_path.active[0].regs, arg_reg_name(self.p, 0))
-						next_path.active[0].memory.store(addr, to_store)
-						#print "addr",addr
-					    else: # else taint all the args
-						print "return nothing, taint all writable args(%d)"%nargs
-					        for j in xrange(0,nargs):
-	 			                    addr = getattr(next_path.active[0].regs, arg_reg_name(self.p, j))
-						    cfg = getBugFindingCFG()
-						    assert cfg!=None
-						    print addr,addr.symbolic
-						    if not addr.symbolic:
-						    	seg = cfg._addr_belongs_to_segment(addr.args[0])
-						        #seg = self._p.loader.find_segment_containing(addr)
-						        if seg and not seg.is_writable:
-							    pass
-							else:
-				                            next_path.active[0].memory.store(addr, to_store)
-						    else:
-							next_path.active[0].memory.store(addr, to_store)
-						    #next_path.active[0].memory.store(addr, to_store)
-				            _restore_caller_regs(self,current_path,next_path)
-                		    	    break
-				        except Exception as e:
-				   	    print("ERROR: %s"%str(e))
+                            # print "cpegg777"
+                            # print "followTarget",followTarget
+                            if self.get_addr(next_path) not in self._p.loader.main_object.plt.values() and \
+                              getBugFindingFlag() and \
+                              self.get_addr(current_path) not in followTarget:
+                                # 获取参数个数
+                                nargs = get_arity(self._p, self.get_addr(current_path))
+                                print ("***** Not in functrace addr 0x%x"%self.get_addr(current_path))
+                                # print "cpegg888",nargs
+                                # 遍历当前函数调用的参数
+                                for i in xrange(nargs):
+                                    name = self._p.arch.register_names[ordered_argument_regs[self._p.arch.name][i]]
+                                    try:
+                                        val_arg = getattr(self.get_state(next_path).regs, name)
+                                        #print "cpegg999",name,val_arg
+                                    except:
+                                        break
+                                    # 判断参数是否有污点标记
+                                    if self.is_or_points_to_tainted_data(val_arg, next_path):
+                                        try:
+                                            print( "some args are tainted", val_arg)
+                                            callNextAddr=getattr(next_path.active[0].regs, self._p.arch.register_names[link_regs[self._p.arch.name]]).args[0]
+                                            callNextIns=self._p.factory.block(callNextAddr).capstone.insns[0]
+                                            to_store = self.get_sym_val(name=self.taint_buf, bits=self.taint_buf_size)
+                                            # 判断next_path函数返回值是否有被使用
+                                            if (callNextIns.insn.insn_name()=='str' and callNextIns.insn.op_str.startswith('r0')) or \
+                                              (callNextIns.insn.insn_name()=='mov' and callNextIns.insn.op_str.endswith('r0')) or \
+                                              (callNextIns.insn.insn_name()=='sub' and callNextIns.insn.op_str.endswith('r0, #0')): 
+                                                # the function return something, only taint the return value
+                                                print ("return something, only taint r0")
+                                                setattr(next_path.active[0].regs, arg_reg_name(self.p, 0), claripy.BVV(self.taint_buf_size, self.p.arch.bits))
+                                                _malloc(self, self.get_addr(current_path), next_path)
+                                                addr = getattr(next_path.active[0].regs, arg_reg_name(self.p, 0))
+                                                # 将新生成的符号化变量存储在模拟分配的堆缓冲区上
+                                                next_path.active[0].memory.store(addr, to_store)
+                                                #print "addr",addr
+                                            else: 
+                                                # else taint all the args
+                                                print ("return nothing, taint all writable args(%d)"%nargs)
+                                                for j in xrange(0, nargs):
+                                                    addr = getattr(next_path.active[0].regs, arg_reg_name(self.p, j))
+                                                    cfg = getBugFindingCFG()
+                                                    assert cfg!=None
+                                                    print (addr, addr.symbolic)
+                                                    if not addr.symbolic:
+                                                        seg = cfg._addr_belongs_to_segment(addr.args[0])
+                                                        #seg = self._p.loader.find_segment_containing(addr)
+                                                        if seg and not seg.is_writable:
+                                                            pass
+                                                        else:
+                                                            next_path.active[0].memory.store(addr, to_store)
+                                                    else:
+                                                        next_path.active[0].memory.store(addr, to_store)
+                                                    #next_path.active[0].memory.store(addr, to_store)
+                                            _restore_caller_regs(self,current_path,next_path)
+                                            break
+                                        except Exception as e:
+                                               print("ERROR: %s"%str(e))
                             else:
-				#print("Following function call to %s" % hex(self.get_addr(next_path)))
+                                #print("Following function call to %s" % hex(self.get_addr(next_path)))
 
-				# since memset may include memory crash, we check if the size of memset is too large
-				if self.get_addr(next_path)==self._p.loader.main_object.plt['memset']:
-				    name = self._p.arch.register_names[ordered_argument_regs[self._p.arch.name][2]]
-				    val_arg = getattr(self.get_state(next_path).regs, name)
-				    if val_arg.args[0]>0x1000:
-					print "memset size larger than 0x1000(0x%x), stop analysis"%val_arg.args[0]
-					self._keep_run=False
-				else:
-                            	    next_depth = current_depth - 1
-		    else:
-			pass
-			#next_depth = current_depth - 1
-			#print next_path.active
+                                # since memset may include memory crash, we check if the size of memset is too large
+                                if self.get_addr(next_path)==self._p.loader.main_object.plt['memset']:
+                                    name = self._p.arch.register_names[ordered_argument_regs[self._p.arch.name][2]]
+                                    val_arg = getattr(self.get_state(next_path).regs, name)
+                                    if val_arg.args[0]>0x1000:
+                                        print ("memset size larger than 0x1000(0x%x), stop analysis"%val_arg.args[0])
+                                        self._keep_run=False
+                                else:
+                                        next_depth = current_depth - 1
+                    else:
+                        pass
+                        #next_depth = current_depth - 1
+                        #print next_path.active
             except Exception as e:
                 log.error("ERROR: %s" % str(e))
                 return
 
+            # 由于函数返回进入当前基本块
             try:
                 if self.get_state(next_path).history.jumpkind == 'Ijk_Ret':
                     next_depth = next_depth + 1
             except:
                 continue
 
+            # 由于分支跳转进入当前基本块，检查back jump
             # we have a back jump
             if self.get_state(next_path).history.jumpkind == 'Ijk_Boring' and \
                self.get_addr(next_path) <= self.get_addr(current_path) and \
                not self._follow_back_jump(current_path, next_path, guards_info):
+                # 如果是从高地址向低地址跳转，就可能处在一个loop中，判断是否跟踪这一跳转
                 log.debug("breaking loop")
                 self._new_path = True
                 continue
@@ -1239,6 +1271,7 @@ class CoreTaint:
         
         self._keep_run = False
 
+    # "guards_info" is empty
     def flat_explore(self, state, check_path_fun, guards_info, force_thumb=False, **kwargs):
         """
         Run a symbolic-based exploration
@@ -1250,9 +1283,9 @@ class CoreTaint:
         :param kwargs: kwargs
         :return: None 
         """
-	global no_calltrace_overlap
+        global no_calltrace_overlap
         self._keep_run = True
-	if no_calltrace_overlap:
+        if no_calltrace_overlap:
             initial_path = self._p.factory.path(state)
             initial_path = self._p.factory.simgr(initial_path, save_unconstrained=True, save_unsat=True)
         current_depth = self._interfunction_level
@@ -1260,6 +1293,7 @@ class CoreTaint:
         if force_thumb:
             # set thumb mode
             initial_path = initial_path.step(thumb=True)[0]
+        
         self._flat_explore(initial_path, check_path_fun, guards_info, current_depth, **kwargs)
 
     def start_logging(self):
@@ -1357,6 +1391,7 @@ class CoreTaint:
             # let's restore it
             signal.alarm(self._old_timer)
 
+    # "state, summarized_f, check_func" are set, force_thumb=False, init_bss=False
     def run(self, state, sinks_info, sources_info, summarized_f=None, init_bss=True,
             check_func=None, force_thumb=False, use_smart_concretization=True):
 
@@ -1412,7 +1447,9 @@ class CoreTaint:
         if init_bss:
             log.info("init .bss")
             self._init_bss(state)
+        
         try:
+            # state is a SimState
             self.flat_explore(state,  check_func, [], force_thumb=force_thumb, sinks_info=sinks_info,
                               sources_info=sources_info)
         except TimeOutException:
