@@ -10,7 +10,7 @@ import taint_check.size_analysis
 from taint_check.bar_logger import bar_logger
 from taint_check.binary_dependency_graph.binary_dependency_graph import BinaryDependencyGraph, Role, RoleInfo
 from taint_check.binary_dependency_graph.utils import get_ord_arguments_call, get_any_arguments_call, are_parameters_in_registers, \
-    get_mem_string, STR_LEN, get_memcpy_like, get_sizeof_like, get_heap_alloc, get_env, get_memcmp_like_unsized, \
+    get_mem_string, STR_LEN, get_memcpy_like, get_sizeof_like, get_heap_alloc, get_heap_free, get_env, get_memcmp_like_unsized, \
     get_memcmp_like_sized, get_dyn_sym_addr, find_memcpy_like, get_reg_used, get_addrs_similar_string, \
     get_indirect_str_refs, get_atoi, get_nvram, get_cJSON
 from taint_check.taint_analysis import coretaint, summary_functions
@@ -144,6 +144,7 @@ class BugFinder:
         mem_cpy_summ = get_memcpy_like(p)
         size_of_summ = get_sizeof_like(p)
         heap_alloc_summ = get_heap_alloc(p)
+        heap_free_summ = get_heap_free(p)
         env_summ = get_env(p)
         memcmp_like_unsized = get_memcmp_like_unsized(p)
         memcmp_like_sized = get_memcmp_like_sized(p)
@@ -154,6 +155,7 @@ class BugFinder:
         summaries = mem_cpy_summ
         summaries.update(size_of_summ)
         summaries.update(heap_alloc_summ)
+        summaries.update(heap_free_summ)
         summaries.update(env_summ)
         summaries.update(memcmp_like_unsized)
         summaries.update(memcmp_like_sized)

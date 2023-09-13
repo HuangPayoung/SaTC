@@ -335,6 +335,22 @@ def get_heap_alloc(p):
     return summarized_f
 
 
+def get_heap_free(p):
+    """
+    Gets and summarizes heap free functions within a Linux binary
+
+    :param p: angr project
+    :return: function summaries
+    """
+
+    addrs = get_dyn_sym_addrs(p, ['free'])
+    summarized_f = {}
+    for f in addrs:
+        summarized_f[f] = summary_functions._free
+
+    return summarized_f
+
+
 def get_sizeof_like(p):
     """
     Gets and summarizes heap sizeof-like functions within a Linux binary

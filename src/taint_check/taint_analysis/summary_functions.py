@@ -420,6 +420,8 @@ def sizeof(_core, call_site_path, plt_path):
 # Heap functions
 #
 
+# addr -> [start, end, inuse]
+heap_chunk = {}
 
 def _malloc(_core, _, plt_path):
     """
@@ -447,6 +449,7 @@ def _malloc(_core, _, plt_path):
     # setattr(state.regs, arg_reg_name(p, 0), addr)
     ret_reg_name = p.arch.register_names[return_regs[p.arch.name]]
     setattr(state.regs, ret_reg_name, addr)
+    heap_chunk[addr] = [addr, addr + size, 1]
     return sim_size
 
 
@@ -479,6 +482,8 @@ def _realloc(_core, _, plt_path):
     # setattr(state.regs, arg_reg_name(p, 0), addr)
     ret_reg_name = p.arch.register_names[return_regs[p.arch.name]]
     setattr(state.regs, ret_reg_name, addr)
+    heap_chunk[addr] = [addr, addr + size, 1]
+    heap_chunk[ptr][2] = 0
     return sim_size
 
 
@@ -509,6 +514,7 @@ def _calloc(_core, _, plt_path):
     # setattr(state.regs, arg_reg_name(p, 0), addr)
     ret_reg_name = p.arch.register_names[return_regs[p.arch.name]]
     setattr(state.regs, ret_reg_name, addr)
+    heap_chunk[addr] = [addr, addr + size, 1]
     return sim_size
 
 
@@ -543,6 +549,37 @@ def heap_alloc(_core, call_site_path, plt_path):
             arg = taint_args[0]
             if is_size_taint(arg):
                 _core.do_recursive_untaint(arg, plt_path)
+
+    _restore_caller_regs(_core, call_site_path, plt_path)
+
+
+def set_heap_chunk(target):
+    global heap_chunk
+    heap_chunk = target
+
+def get_heap_chunk():
+    global heap_chunk
+    return heap_chunk
+
+def _free(_core, call_site_path, plt_path):
+    """
+    Summarize heap free functions
+    :param _core: core taint engin
+    :param call_site_path: call site angr path
+    :param plt_path: path to the plt (i.e., call_site.step())
+    :return:
+    """
+    p = _core.p
+    state = plt_path.active[0]
+    ptr = getattr(state.regs, arg_reg_name(p, 0))
+    ptr = state.se.eval(ptr)
+    if ptr not in heap_chunk:
+        print "[-] error for free a not known chunk!"
+    else:
+        if heap_chunk[ptr][2] == 0:
+            print "[-] found double free vuln!"
+        else:
+            heap_chunk[ptr][2] == 0
 
     _restore_caller_regs(_core, call_site_path, plt_path)
 

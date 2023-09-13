@@ -5,7 +5,8 @@ import random
 import signal
 from random import shuffle
 from utils import *
-from summary_functions import _malloc,_restore_caller_regs
+from summary_functions import _malloc,_restore_caller_regs, set_heap_chunk, get_heap_chunk
+import copy
 import pickle
 import sys
 import traceback
@@ -1246,9 +1247,11 @@ class CoreTaint:
                 new_guards_info.append([hex(self.get_addr(current_path)), current_guards[-1]])
 
             # next step!
+            heap_chunk_bak = copy.deepcopy(get_heap_chunk())
             self._flat_explore(next_path, check_path_fun, new_guards_info, next_depth, **kwargs)
             log.info ("Back to block %s", hex(self.get_addr(current_path)))
             self._new_path = True
+            set_heap_chunk(heap_chunk_bak) 
 
         log.debug("Backtracking")
 
