@@ -278,3 +278,30 @@ def sprintf(p, core_taint, plt_path, *_, **__):
         return False
     else:
         raise Exception("implement me")
+
+def strcat(p, core_taint, plt_path, *_, **__):
+    """
+    strcat function summary
+
+    :param p: angr project
+    :param core_taint: core taint engine
+    :param plt_path: path to the plt entry
+    :return: None
+    """
+    if not checkbufferoverflow:
+        print "return due to filtered"
+        return False
+    plt_state = plt_path.active[0]
+    if are_parameters_in_registers(p):
+        name = p.arch.register_names[ordered_argument_regs[p.arch.name][1]]
+        reg = getattr(plt_state.regs, name)
+        ret = (core_taint.is_tainted(reg, path=plt_path) or checkstringtainted(p, core_taint, plt_state, name, plt_path))
+        if ret:
+            print "STRCAT return True"
+            setfindflag(True, plt_state.regs.lr.args[0])
+            return True
+        else:
+            print "STRCAT return False"
+            return False
+    else:
+        raise Exception("implement me")
