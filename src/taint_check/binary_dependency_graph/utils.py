@@ -266,13 +266,13 @@ def get_memcpy_like(p):
 
     addrs = get_dyn_sym_addrs(p, ['sprintf'])
     for f in addrs:
-	summarized_f[f] = summary_functions.sprintf
+        summarized_f[f] = summary_functions.sprintf
     
     addrs = get_dyn_sym_addrs(p, ['snprintf'])
     for f in addrs:
-	summarized_f[f] = summary_functions.snprintf
+        summarized_f[f] = summary_functions.snprintf
 
-    addrs = get_dyn_sym_addrs(p, ['strcpy','stristr'])
+    addrs = get_dyn_sym_addrs(p, ['strcpy', 'stristr', 'strcat'])
     print addrs
     for f in addrs:
         summarized_f[f] = summary_functions.memcpy_unsized
