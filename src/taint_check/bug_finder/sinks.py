@@ -275,6 +275,6 @@ def sprintf(p, core_taint, plt_path, *_, **__):
                 print "SPRINTF return True"
                 setfindflag(True, plt_state.regs.lr.args[0])
                 return True
-            return False
+        return False
     else:
         raise Exception("implement me")
