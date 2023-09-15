@@ -263,6 +263,33 @@ def fwrite(p, core_taint, plt_path, *_, **__):
         raise Exception("implement me")
 
 
+def printf(p, core_taint, plt_path, *_, **__):
+    """
+    printf function summary
+
+    :param p: angr project
+    :param core_taint: core taint engine
+    :param plt_path: path to the plt entry
+    :return: None
+    """
+    plt_state = plt_path.active[0]
+    if are_parameters_in_registers(p):
+        frmt_str = getattr(plt_state.regs, arg_reg_name(p, 0))
+        str_val = get_string(p, frmt_str.args[0], extended=True)
+        n_vargs = str_val.count('%s') + str_val.count('%d')
+        for i in range(1, 1 + n_vargs):
+            name = p.arch.register_names[ordered_argument_regs[p.arch.name][i]]
+            reg = getattr(plt_state.regs, name)
+            if (core_taint.is_tainted(reg, path=plt_path) or checkstringtainted(p, core_taint, plt_state, name,
+                                                                                plt_path)):
+                print "PRINTF return True"
+                setfindflag(True, plt_state.regs.lr.args[0])
+                return True
+        return False
+    else:
+        raise Exception("implement me")
+
+
 def sprintf(p, core_taint, plt_path, *_, **__):
     """
     sprintf function summary
