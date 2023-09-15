@@ -579,7 +579,7 @@ def _free(_core, call_site_path, plt_path):
         if heap_chunk[ptr][2] == 0:
             print "[-] found double free vuln!"
         else:
-            heap_chunk[ptr][2] == 0
+            heap_chunk[ptr][2] = 0
 
     _restore_caller_regs(_core, call_site_path, plt_path)
 
