@@ -7,7 +7,7 @@
 from front_analysise.untils.logger.logger import get_logger
 
 
-class _Parser():
+class _Parser(object):
 
     # def __init__(self, traver):
     #     self.traver = traver

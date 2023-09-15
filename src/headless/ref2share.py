@@ -17,7 +17,7 @@ import os
 DEBUG = True
 
 heuristicMin = 4
-sinks = ['nvram_safe_set', 'nvram_bufset', 'setenv', 'nvram_set']
+sinks = ['nvram_safe_set', 'nvram_bufset', 'setenv', 'nvram_set', 'acosNvramConfig_set']
 digest = ['strcpy', 'sprintf', 'memcpy', 'strcat']
 
 heuristicIgnoreFunctions = ['strcpy', 'strncpy', 'strcat', 'memcpy']
@@ -48,7 +48,8 @@ shareFunctionKeyValuePos = {
     'nvram_safe_set': (0, 1),
     'nvram_bufset': (1, 2),
     'setenv': (0, 1),
-    'nvram_set': (1, 2)
+    'nvram_set': (1, 2),
+    'acosNvramConfig_set': (0, 1)
 }
 
 shareResult = defaultdict(set)
