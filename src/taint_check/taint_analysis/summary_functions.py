@@ -793,7 +793,7 @@ def nvram(_core, call_site_path, plt_path):
 #
 
 
-def atoi(_core, _, plt_path):
+def atoi(_core, call_site_path, plt_path):
     p = _core.p
     plt_path_cp = plt_path.copy(copy_states=True)
 
@@ -802,4 +802,5 @@ def atoi(_core, _, plt_path):
     if _core.is_or_points_to_tainted_data(val, plt_path_cp):
         addr = plt_path.active[0].memory.load(val)
         _core.do_recursive_untaint(addr, plt_path)
-    plt_path.step().step()
+    # plt_path.step().step()
+    _restore_caller_regs(_core, call_site_path, plt_path)

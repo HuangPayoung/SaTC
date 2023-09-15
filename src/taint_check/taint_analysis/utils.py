@@ -71,6 +71,12 @@ ordered_argument_regs = {
         archinfo.ArchMIPS32.registers['a1'][0],
         archinfo.ArchMIPS32.registers['a2'][0],
         archinfo.ArchMIPS32.registers['a3'][0],
+        archinfo.ArchMIPS32.registers['s0'][0],
+        archinfo.ArchMIPS32.registers['s1'][0],
+        archinfo.ArchMIPS32.registers['s2'][0],
+        archinfo.ArchMIPS32.registers['fp'][0],
+        archinfo.ArchMIPS32.registers['s5'][0],
+        archinfo.ArchMIPS32.registers['s6'][0],
     ],
 }
 
