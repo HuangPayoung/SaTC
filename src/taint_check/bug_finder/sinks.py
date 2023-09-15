@@ -1,5 +1,6 @@
 from taint_check.binary_dependency_graph.utils import are_parameters_in_registers, get_string
 from taint_check.taint_analysis.utils import ordered_argument_regs, arg_reg_name
+from taint_check.taint_analysis.summary_functions import get_heap_chunk
 from .config import checkcommandinjection, checkbufferoverflow
 import traceback
 
@@ -175,13 +176,6 @@ def strcpy(p, core_taint, plt_path, size_con=None):
     if are_parameters_in_registers(p):
         name_reg_src = p.arch.register_names[ordered_argument_regs[p.arch.name][1]]
         reg_src = getattr(plt_state.regs, name_reg_src)
-        if core_taint.is_tainted(reg_src, plt_path) or checkstringtainted(p, core_taint, plt_state, name_reg_src,
-                                                                          plt_path):
-            # if core_taint.is_or_points_to_tainted_data(reg_src, plt_path, unconstrained=False):
-            print '1', reg_src
-            setfindflag(True, plt_state.regs.lr.args[0])
-            print "strcpy return True"
-            return True
         # check the size of the two buffers
         name_reg_dst = p.arch.register_names[ordered_argument_regs[p.arch.name][0]]
         reg_dst = getattr(plt_state.regs, name_reg_dst)
@@ -189,6 +183,19 @@ def strcpy(p, core_taint, plt_path, size_con=None):
         src = core_taint.safe_load(plt_path, reg_src)
         dst = core_taint.safe_load(plt_path, reg_dst)
         tainted = checkstringtainted(p, core_taint, plt_state, name_reg_src, plt_path)
+
+        ptr = plt_state.se.eval(reg_dst)
+        heap_chunks = get_heap_chunk()
+        if ptr in heap_chunks and heap_chunks[ptr][2] == 0:
+            print "[*] found use-after-free in STRCPY !!"
+        
+        if core_taint.is_tainted(reg_src, plt_path) or checkstringtainted(p, core_taint, plt_state, name_reg_src,
+                                                                          plt_path):
+            # if core_taint.is_or_points_to_tainted_data(reg_src, plt_path, unconstrained=False):
+            print '1', reg_src
+            setfindflag(True, plt_state.regs.lr.args[0])
+            print "strcpy return True"
+            return True
 
         # we raise alerts also for equal size of src and dst, as the analysis might be under-constrained.
         ret = tainted and size_con >= (src.cardinality - 1) >= (dst.cardinality - 1)
@@ -216,6 +223,12 @@ def memcpy(p, core_taint, plt_path, *_, **__):
     if are_parameters_in_registers(p):
         name = p.arch.register_names[ordered_argument_regs[p.arch.name][2]]
         reg = getattr(plt_state.regs, name)
+        name_reg_dst = p.arch.register_names[ordered_argument_regs[p.arch.name][0]]
+        reg_dst = getattr(plt_state.regs, name_reg_dst)
+        ptr = plt_state.se.eval(reg_dst)
+        heap_chunks = get_heap_chunk()
+        if ptr in heap_chunks and heap_chunks[ptr][2] == 0:
+            print "[*] found use-after-free in MEMCPY !!"
         ret = (core_taint.is_tainted(reg, path=plt_path) or checkstringtainted(p, core_taint, plt_state, name,
                                                                                plt_path))
         if ret:
@@ -264,6 +277,12 @@ def sprintf(p, core_taint, plt_path, *_, **__):
         return False
     plt_state = plt_path.active[0]
     if are_parameters_in_registers(p):
+        name_reg_dst = p.arch.register_names[ordered_argument_regs[p.arch.name][0]]
+        reg_dst = getattr(plt_state.regs, name_reg_dst)
+        ptr = plt_state.se.eval(reg_dst)
+        heap_chunks = get_heap_chunk()
+        if ptr in heap_chunks and heap_chunks[ptr][2] == 0:
+            print "[*] found use-after-free in SPRINTF !!"
         frmt_str = getattr(plt_state.regs, arg_reg_name(p, 1))
         str_val = get_string(p, frmt_str.args[0], extended=True)
         n_vargs = str_val.count('%s') + str_val.count('%d')
@@ -293,6 +312,12 @@ def strcat(p, core_taint, plt_path, *_, **__):
         return False
     plt_state = plt_path.active[0]
     if are_parameters_in_registers(p):
+        name_reg_dst = p.arch.register_names[ordered_argument_regs[p.arch.name][0]]
+        reg_dst = getattr(plt_state.regs, name_reg_dst)
+        ptr = plt_state.se.eval(reg_dst)
+        heap_chunks = get_heap_chunk()
+        if ptr in heap_chunks and heap_chunks[ptr][2] == 0:
+            print "[*] found use-after-free in STRCAT !!"
         name = p.arch.register_names[ordered_argument_regs[p.arch.name][1]]
         reg = getattr(plt_state.regs, name)
         ret = (core_taint.is_tainted(reg, path=plt_path) or checkstringtainted(p, core_taint, plt_state, name, plt_path))
