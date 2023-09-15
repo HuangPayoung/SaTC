@@ -10,6 +10,8 @@ from front_analysise.modules.parameter.keyword import Keyword
 
 class BaseParser(_Parser):
 
+    # Modified by LHY
+    # keywords should be concatenated as a whole path, which appears in the backend binary
     def _get_keyword(self, keyword, check):
 
         keyword_obj = Keyword.factory_keyword(keyword, self.fpath, check)

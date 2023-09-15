@@ -34,7 +34,8 @@ scripts = {
     "ref2share": os.path.join(GHIDRA_SCRIPT, "ref2share.py"),
     "ref2sink_bof": os.path.join(GHIDRA_SCRIPT, "ref2sink_bof.py"),
     "ref2sink_cmdi": os.path.join(GHIDRA_SCRIPT, "ref2sink_cmdi.py"),
-    "share2sink": os.path.join(GHIDRA_SCRIPT, "share2sink.py")
+    "share2sink": os.path.join(GHIDRA_SCRIPT, "share2sink.py"),
+    "call2sink": os.path.join(GHIDRA_SCRIPT, "call2sink.py")
 }
 
 
@@ -50,7 +51,7 @@ def argsparse():
                         help="Folder for output results ")
     # execute ghidra ： command
     parser.add_argument("--ghidra_script", required=False,
-                        choices=["ref2sink_cmdi", "ref2sink_bof", "share2sink", "ref2share", "all"],
+                        choices=["ref2sink_cmdi", "ref2sink_bof", "share2sink", "ref2share", "call2sink", "all"],
                         action="append",
                         help="ghidra script to run"
                         )
@@ -229,8 +230,9 @@ def ghidra_analysise(args, border_bin):
     # dispose config_setter of all border binaries first to support cross binary analysis
     config_setter_sum = os.path.join(ghidra_result_output, "config_setter_sum.json")
     isExist = os.path.exists(config_setter_sum)
-    if ("share2sink" in ghidra_scripts or "ref2share" in ghidra_scripts):
-    # if ("share2sink" in ghidra_scripts or "ref2share" in ghidra_scripts) and not isExist:
+    # 如果指定了相关参数，就先对所有边界二进制做一遍ref2share脚本的预检测
+    # if ("share2sink" in ghidra_scripts or "ref2share" in ghidra_scripts):
+    if ("share2sink" in ghidra_scripts or "ref2share" in ghidra_scripts) and not isExist:
         # run ref2share
         s = "ref2share"
         random = uuid.uuid4().hex
@@ -255,17 +257,20 @@ def ghidra_analysise(args, border_bin):
             ghidra_args = [
                 HEADLESS_GHIDRA, ghidra_project, project_name,
                 '-postscript', exec_script, keyword_file, output_name, config_setter_sum, binname,
-                '-scriptPath', os.path.dirname(exec_script)
+                '-scriptPath', os.path.dirname(exec_script),
             ]
             if os.path.exists(ghidra_rep):
+                ghidra_args.append('-noanalysis')
                 ghidra_args += ['-process', os.path.basename(binpath)]
             else:
                 ghidra_args += ['-import', "'" + binpath + "'"]
 
+            print(ghidra_args)
             p = subprocess.Popen(ghidra_args)
             p.wait()
         
 
+    # 遍历其他脚本（ref2sink_bof, ref2sink_cmdi, call2sink, share2sink）
     # loop ghidra_scripts
     for s in ghidra_scripts:
         if s == "ref2share":
@@ -299,18 +304,20 @@ def ghidra_analysise(args, border_bin):
 
             output_name = os.path.join(bin_ghidra_project, "{}_{}.result".format(binname, s))
 
-            project_name = binname + "_" + s + random
+            project_name = binname + "_" + s #+ random
 
             ghidra_args = [
                 HEADLESS_GHIDRA, ghidra_project, project_name,
                 '-postscript', exec_script, keyword_file, output_name,
-                '-scriptPath', os.path.dirname(exec_script)
+                '-scriptPath', os.path.dirname(exec_script),
             ]
             if os.path.exists(ghidra_rep):
+                ghidra_args.append('-noanalysis')
                 ghidra_args += ['-process', os.path.basename(binpath)]
             else:
                 ghidra_args += ['-import', "'" + binpath + "'"]
 
+            print(ghidra_args)
             p = subprocess.Popen(ghidra_args)
             p.wait()
 

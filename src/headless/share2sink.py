@@ -24,6 +24,7 @@ shareFunctionKeyPos = {
     'nvram_bufget': 1,
     'getenv': 0,
     'nvram_get': 1,
+    'acosNvramConfig_get': 0,
 }
 needCheckConstantStr = {
     'system': 0,
@@ -71,6 +72,7 @@ def parseShare(paramFile):
             shareResult[func].add(key)
     return shareResult
 
+# Added by LHY
 nameToFunc = {}
 def parseShareJson(paramFile):
     config_setter_sum_data = dict()

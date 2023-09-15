@@ -2,13 +2,21 @@
 # @author tkmk
 # @category Analysis
 
+from logging import basicConfig
 import time
 import sys
+import os
+import json
 from ghidra.util.classfinder import ClassSearcher
 from ghidra.app.plugin.core.analysis import ConstantPropagationAnalyzer
 from ghidra.program.util import SymbolicPropogator
 from ghidra.program.model.mem import MemoryAccessException
 from ghidra.util.exception import CancelledException
+# Added by LHY
+from ghidra.util import UndefinedFunction 
+from ghidra.util.task import ConsoleTaskMonitor
+from ghidra.app.decompiler import DecompileOptions, DecompInterface
+from ghidra.program.model.symbol import RefType
 from collections import Counter, defaultdict
 import re
 
@@ -89,14 +97,27 @@ def getCallingArgs(addr, pos):
         return
     return getRegister(addr, reg)
 
+def getFunctionContainingPlus(addr):
+    func = getFunctionContaining(addr)
+    if func is not None:
+        return func
+    undefinedFunc = UndefinedFunction.findFunction(currentProgram, addr, ConsoleTaskMonitor())
+    if undefinedFunc is not None:
+        # eg. UndefinedFunction_0008dd10 -> FUN_0008dd10
+        entryPoint = undefinedFunc.getEntryPoint()
+        oldName = undefinedFunc.getName()
+        newName = oldName.replace("UndefinedFunction", "FUN")
+        func = createFunction(entryPoint, newName)
+        return func
+    return None
 
 def getRegister(addr, reg):
     if analyzer is None:
         getAnalyzer()
 
-    func = getFunctionContaining(addr)
+    func = getFunctionContainingPlus(addr)
     if func is None:
-        return
+        return None
 
     if func in syms:
         symEval = syms[func]
@@ -145,7 +166,7 @@ def checkSafeFormat(addr, offset=0):
         if data[i] == '%' and data[i + 1] != '%':
             fmtIndex += 1
             if data[i + 1] == 's':
-                if fmtIndex > 3:
+                if fmtIndex > 3: # why?
                     return False
                 if not checkConstantStr(addr, fmtIndex):
                     return False
@@ -213,7 +234,7 @@ callMap = {}
 safeFuncs = set()
 referenced = set()
 
-sinkPoints = set()
+
 def findSinkPath(refaddr, stringaddr, stringval):
     pending = []
 
@@ -248,7 +269,6 @@ def findSinkPath(refaddr, stringaddr, stringval):
                     print >>f, '>>', a2h(addr), '->', callee,
 
         print >>f
-        sinkPoints.add(callee.name + " " + a2h(addr))
 
     def dfs(func, path, start=None):
         '''path: list of (addr of call, callee, callDigestFunc)'''
@@ -278,7 +298,7 @@ def findSinkPath(refaddr, stringaddr, stringval):
             safeFuncs.add(func)
         return vulnerable
 
-    startFunc = getFunctionContaining(refaddr)
+    startFunc = getFunctionContainingPlus(refaddr)
     assert startFunc is not None
 
     pending.append(startFunc)
@@ -312,7 +332,7 @@ def searchParam(target, refstart=None, refend=None):
                 continue
             if target not in newParam:
                 referenced.add(target)
-            caller = getFunctionContaining(ref.fromAddress)
+            caller = getFunctionContainingPlus(ref.fromAddress)
             if caller is not None:
                 if DEBUG:
                     print 'Reference From', a2h(ref.fromAddress), '(%s)' % caller,
@@ -323,7 +343,7 @@ def searchParam(target, refstart=None, refend=None):
                 checkedRefAddr.add(ref.fromAddress)
             else:
                 for ref2 in getReferencesTo(ref.fromAddress):
-                    caller = getFunctionContaining(ref2.fromAddress)
+                    caller = getFunctionContainingPlus(ref2.fromAddress)
                     if caller is None:
                         if DEBUG:
                             print 'Ignore', getSymbolAt(ref2.fromAddress), 'at', a2h(ref2.fromAddress)
@@ -342,8 +362,182 @@ def searchParam(target, refstart=None, refend=None):
         print 'finish searching "%s"' % target
     return haveWayToSink
 
+# Added by LHY
+cachedHighFunc = dict()
+def get_high_function(func):
+    high = None
+    funcEntryOffset = func.getEntryPoint().getOffset()
+    if cachedHighFunc.has_key(funcEntryOffset):
+        return cachedHighFunc[funcEntryOffset]
+    options = DecompileOptions()
+    monitor = ConsoleTaskMonitor()
+    ifc = DecompInterface()
+    ifc.setOptions(options)
+    ifc.openProgram(getCurrentProgram())
+    # Setting a simplification style will strip useful `indirect` information.
+    # Please don't use this unless you know why you're using it.
+    #ifc.setSimplificationStyle("normalize") 
+    res = ifc.decompileFunction(func, 60, monitor)
+    high = res.getHighFunction()
+    if high:
+        cachedHighFunc[funcEntryOffset] = high
+    return high
+
+def dump_refined_pcode(high_func, startAddr=None): # for developping and debug
+    opiter = high_func.getPcodeOps()
+    while opiter.hasNext():
+        op = opiter.next()
+        insAddr = op.getSeqnum().getTarget()
+        if startAddr is None or insAddr.getOffset() > startAddr.getOffset():
+            print("{0}: {1}".format(a2h(insAddr), op.toString()))
+
+# Return the CALL pcodeOP or the suspect source function
+# TODO: Check if the arg of CALL is related to paramAddr
+def getRelatedCallPcodeOp(hfunc, refAddr, paramAddr):
+    calleeFunc = None
+    basicBlock = None
+    opiter = hfunc.getPcodeOps()
+    while opiter.hasNext():
+        op = opiter.next()
+        insAddr = op.getSeqnum().getTarget()
+        if insAddr.getOffset() > refAddr.getOffset():
+            basicBlock = op.getParent()
+            break
+    if basicBlock: # Not elegant
+        opIter = basicBlock.getIterator()
+        while opIter.hasNext():
+            op = opIter.next()
+            insAddr = op.getSeqnum().getTarget()
+            if insAddr.getOffset() < refAddr.getOffset(): # Fix: Not accurate! 
+                continue
+            # print("{0}: {1}".format(a2h(insAddr), op.toString()))
+            # Only find the closest CALL pcode.
+            if op.getMnemonic() == "CALL":
+                calleeVar = op.getInput(0)
+                calleeFunc = getFunctionContainingPlus(calleeVar.getAddress())
+                print("Possible source function: " + calleeFunc.getName())
+                break
+    return calleeFunc
+
+# Deduce the data receive function
+def searchFunc(paramTargets):
+    possibleSourceFunctions = dict()
+    for target in paramTargets:
+        curAddr = currentProgram.minAddress
+        end = currentProgram.maxAddress
+        while curAddr < end:
+            curAddr = find(curAddr, target)
+            if curAddr is None:
+                break
+            if getByte(curAddr.add(len(target))) != 0:
+                curAddr = curAddr.add(1)
+                continue
+            for ref in getReferencesTo(curAddr):
+                if target not in newParam:
+                    referenced.add(target)
+                paramRefAddr = ref.fromAddress
+                caller = getFunctionContainingPlus(paramRefAddr)
+                if caller is None:
+                    for ref2 in getReferencesTo(ref.fromAddress):
+                        caller = getFunctionContainingPlus(ref2.fromAddress)
+                        if caller is not None:
+                            print "Find param ref:", caller.getName(), a2h(ref2.fromAddress), target
+                            hfunc = get_high_function(caller)
+                            if not hfunc:
+                                continue
+                            func = getRelatedCallPcodeOp(hfunc, refAddr=ref2.fromAddress, paramAddr=curAddr)
+                            if func is not None:
+                                if func in possibleSourceFunctions.keys():
+                                    possibleSourceFunctions[func] += 1
+                                else:
+                                    possibleSourceFunctions[func] = 0
+                else:
+                    print "Find param ref:", caller.getName(), a2h(paramRefAddr), target
+                    hfunc = get_high_function(caller)
+                    if not hfunc:
+                        continue
+                    func = getRelatedCallPcodeOp(hfunc, refAddr=paramRefAddr, paramAddr=curAddr)
+                    if func is not None:
+                        if func in possibleSourceFunctions.keys():
+                            possibleSourceFunctions[func] += 1
+                        else:
+                            possibleSourceFunctions[func] = 0
+                # break #
+            curAddr = curAddr.add(1)
+            # break #
+        # break #
+    sortedSourceFunctions = dict(sorted(
+        possibleSourceFunctions.items(), 
+        reverse=True,
+        key=lambda x: x[1]
+    ))
+    print(sortedSourceFunctions)
+    result = dict()
+    for func, refNum in sortedSourceFunctions.items():
+        func_str = func.getName() + "@" + a2h(func.getEntryPoint())
+        result[func_str] = refNum
+    return result
+
+# For manual reversing
+def findPossibleSinks():
+    possibleSinks = set()
+    for sinkName in sinks:
+        sinkFunc = getFunction(sinkName) # deprecated in new world
+        if sinkFunc is None:
+            for f in currentProgram.functionManager.getFunctions(True):
+                if f.name == sinkName:
+                    sinkFunc = f
+                    break
+        if sinkFunc is None: continue
+        # Deal with thunk function.
+        if sinkFunc.isThunk():
+            # fff = sinkFunc.getThunkedFunction(True)
+            # print fff.getName(), a2h(fff.getEntryPoint())
+            thunkFuncAddr = sinkFunc.getEntryPoint()
+            print("Identify Thunk Function: " + sinkName + "@" + a2h(thunkFuncAddr))
+            for ref in getReferencesTo(thunkFuncAddr):
+                if ref.getReferenceType() == RefType.THUNK:
+                    refAddr = ref.getFromAddress()
+                    sinkFunc = getFunctionContainingPlus(refAddr)
+                    print("Handle thunk function: {0} --> {1}".format(a2h(thunkFuncAddr), a2h(sinkFunc.getEntryPoint())))
+        print("Current sink: " + sinkName)
+        # traverse sinkFunc reference point
+        for ref in getReferencesTo(sinkFunc.entryPoint):
+            if ref.fromAddress.getOffset() == 0:
+                continue
+            if sinkFunc.name in needCheckConstantStr and checkConstantStr(ref.fromAddress, needCheckConstantStr[sinkFunc.name]):
+                continue
+            if sinkFunc.name in needCheckFormat and checkSafeFormat(ref.fromAddress, needCheckFormat[sinkFunc.name]):
+                continue  
+            possibleSinks.add(sinkFunc.name + " " + a2h(ref.fromAddress))
+    possibleSinks = list(possibleSinks)
+    possibleSinks.sort()
+    return possibleSinks
+
+# For manual reversing
+# pos=0 means the first parameter
+def findCallWithParam(funcName, param, pos=0):
+    results = []
+    func = getFunction(funcName)
+    if func is None:
+        for f in currentProgram.functionManager.getFunctions(True):
+            if f.name == funcName:
+                func = f
+                break
+    if func is None:
+        return []
+    for ref in getReferencesTo(func.entryPoint):
+        regValue = getCallingArgs(ref.fromAddress, pos)
+        if regValue:
+            strAddr = toAddr(regValue.value)
+            key = getStr(strAddr)
+            if key and key == param:
+                results.append(a2h(ref.fromAddress))
+    return results
 
 if __name__ == '__main__':
+    print "Base Address: ", a2h(currentProgram.getImageBase())
+
     args = getScriptArgs()
     paramTargets = set(open(args[0]).read().strip().split())
     f = None
@@ -352,36 +546,23 @@ if __name__ == '__main__':
 
     numOfParam = len(paramTargets)
     t = time.time()
-    cnt = 0
-    for i, param in enumerate(paramTargets):
-        monitor.setMessage('Searching for "%s": %d of %d' % (param, i + 1, numOfParam))
-        cnt += searchParam(param)
+    
+    # Manual
+    # possibleSinks = findPossibleSinks()
+    # for line in possibleSinks:
+    #     print(line)
 
-    for i, param in enumerate(newParam):
-        monitor.setMessage('Searching for "%s": %d of %d' % (param, i + 1, len(newParam)))
-        for func in newParam[param]:
-            searchParam(param, func.body.minAddress, func.body.maxAddress)
+    # Test
+    source_result_path = os.path.join(os.path.dirname(args[1]), "possible_sources.json")
+    result = searchFunc(paramTargets)
+    with open(source_result_path, 'w') as source_f:
+        json.dump(result, source_f, indent=2)
+    finalSourceFunc = max(result, key=result.get)
+    print "Final Source Function", finalSourceFunc
 
     t = time.time() - t
     print 'Time Elapsed:', t
-    print '%d of %d parameters are referenced' % (len(referenced), numOfParam)
-    print '%d of %d parameters have way to sink function' % (cnt, numOfParam)
-    print 'Find %d new params heuristicly:' % len(newParam)
-    print ', '.join(newParam)
-
-    sinkPoints = list(sinkPoints)
-    sinkPoints.sort()
-    for s in sinkPoints:
-        print(s)
 
     if f is not None:
         print >>f, 'Time Elapsed:', t
-        print >>f, '%d of %d parameters are referenced' % (len(referenced), numOfParam)
-        print >>f, '%d of %d parameters have way to sink function' % (cnt, numOfParam)
-        print >>f, 'Find %d new params heuristicly:' % len(newParam)
-        print >>f, ', '.join(newParam)
-        if len(sinkPoints):
-            print >>f, 'Deduplicated sink points:'
-            for s in sinkPoints:
-                print >>f, s
         f.close()
