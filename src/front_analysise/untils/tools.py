@@ -131,17 +131,27 @@ class AnalysisBinary(object):
                                 result.add(keyword)
                                 break
                     else:
-                        strings = string.split("/")
-                        for _s in strings:
-                            if _s == keyword.name:
-                                # 整理结果Return
-                                self.log.info("[+] From {} find {}".format(self.binaryfile, keyword.name))
-                                keyword.add_binFile(self.binaryfile)
-                                keyword.set_match_str(keyword.name)
-                                # TEST
-                                keyword.set_bin_str((string, keyword.name))
-                                result.add(keyword)
-                                break
+                        # Modified by LHY
+                        # 1.即使binary里的字符串有时被"/"分割，有时也需要当成一个整体来处理
+                        if string == keyword.name:
+                            # 整理结果Return
+                            self.log.info("[+] From {} find {}".format(self.binaryfile, keyword.name))
+                            keyword.add_binFile(self.binaryfile)
+                            keyword.set_match_str(keyword.name)
+                            result.add(keyword)
+                        # 2.处理"/"分割的情况
+                        else: 
+                            strings = string.split("/")
+                            for _s in strings:
+                                if _s == keyword.name:
+                                    # 整理结果Return
+                                    self.log.info("[+] From {} find {}".format(self.binaryfile, keyword.name))
+                                    keyword.add_binFile(self.binaryfile)
+                                    keyword.set_match_str(keyword.name)
+                                    # TEST
+                                    keyword.set_bin_str((string, keyword.name))
+                                    result.add(keyword)
+                                    break
                 else:
                     if string.find(keyword.name) >= 0:
                         # 整理结果Return

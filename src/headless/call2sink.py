@@ -421,7 +421,7 @@ def getRelatedCallPcodeOp(hfunc, refAddr, paramAddr):
 
 # Deduce the data receive function
 def searchFunc(paramTargets):
-    possibleSourceFunctions = dict()
+    possibleSourceFunctions = dict() # store the immediate results
     for target in paramTargets:
         curAddr = currentProgram.minAddress
         end = currentProgram.maxAddress
@@ -461,7 +461,7 @@ def searchFunc(paramTargets):
                         if func in possibleSourceFunctions.keys():
                             possibleSourceFunctions[func] += 1
                         else:
-                            possibleSourceFunctions[func] = 0
+                            possibleSourceFunctions[func] = 1
                 # break #
             curAddr = curAddr.add(1)
             # break #
@@ -474,6 +474,8 @@ def searchFunc(paramTargets):
     print(sortedSourceFunctions)
     result = dict()
     for func, refNum in sortedSourceFunctions.items():
+        # if refNum < 5: # Heuristic
+        #     continue
         func_str = func.getName() + "@" + a2h(func.getEntryPoint())
         result[func_str] = refNum
     return result
@@ -557,8 +559,21 @@ if __name__ == '__main__':
     result = searchFunc(paramTargets)
     with open(source_result_path, 'w') as source_f:
         json.dump(result, source_f, indent=2)
-    finalSourceFunc = max(result, key=result.get)
-    print "Final Source Function", finalSourceFunc
+    # Get max
+    maxRefNum=0
+    finalSourceFunc = None
+    black_list = ["sprintf", "snprintf", "strcmp", "strncmp"]
+    for name, num in result.items():
+        if name.split("@")[0] in black_list:
+            continue
+        if num >= maxRefNum:
+            finalSourceFunc = name
+            maxRefNum = num
+    if finalSourceFunc and result[finalSourceFunc]>5:
+        # finalSourceFunc = max(result, key=result.get)
+        print "Final Source Function", finalSourceFunc
+    else:
+        print "Fail to deduce new source function!"
 
     t = time.time() - t
     print 'Time Elapsed:', t
