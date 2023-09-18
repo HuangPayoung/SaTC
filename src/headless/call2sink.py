@@ -19,6 +19,8 @@ from ghidra.app.decompiler import DecompileOptions, DecompInterface
 from ghidra.program.model.symbol import RefType
 from collections import Counter, defaultdict
 import re
+from collections import Counter
+
 
 DEBUG = False
 
@@ -310,58 +312,6 @@ def findSinkPath(refaddr, stringaddr, stringval):
         searchStrArg(startFunc)
     return vulnerable
 
-
-def searchParam(target, refstart=None, refend=None):
-    if DEBUG:
-        print 'start searching "%s" ...' % target
-    curAddr = currentProgram.minAddress
-    end = currentProgram.maxAddress
-    haveWayToSink = False
-    checkedRefAddr = set()
-    while curAddr < end:
-        curAddr = find(curAddr, target)
-        if curAddr is None:
-            break
-        if getByte(curAddr.add(len(target))) != 0:
-            curAddr = curAddr.add(1)
-            continue
-        for ref in getReferencesTo(curAddr):
-            if refstart is not None and refstart > ref.fromAddress:
-                continue
-            if refend is not None and refend < ref.fromAddress:
-                continue
-            if target not in newParam:
-                referenced.add(target)
-            caller = getFunctionContainingPlus(ref.fromAddress)
-            if caller is not None:
-                if DEBUG:
-                    print 'Reference From', a2h(ref.fromAddress), '(%s)' % caller,
-                    print 'To', a2h(curAddr), '("%s")' % target
-                if ref.fromAddress in checkedRefAddr:
-                    continue
-                haveWayToSink = findSinkPath(ref.fromAddress, curAddr, target) or haveWayToSink
-                checkedRefAddr.add(ref.fromAddress)
-            else:
-                for ref2 in getReferencesTo(ref.fromAddress):
-                    caller = getFunctionContainingPlus(ref2.fromAddress)
-                    if caller is None:
-                        if DEBUG:
-                            print 'Ignore', getSymbolAt(ref2.fromAddress), 'at', a2h(ref2.fromAddress)
-                        continue
-                    if DEBUG:
-                        print 'Reference From', a2h(ref2.fromAddress), '(%s)' % caller,
-                        print 'To', a2h(ref.fromAddress), '(%s)' % getSymbolAt(ref.fromAddress),
-                        print 'To', a2h(curAddr), '("%s")' % target
-                    if ref2.fromAddress in checkedRefAddr:
-                        continue
-                    haveWayToSink = findSinkPath(ref2.fromAddress, curAddr, target) or haveWayToSink
-                    checkedRefAddr.add(ref2.fromAddress)
-
-        curAddr = curAddr.add(1)
-    if DEBUG:
-        print 'finish searching "%s"' % target
-    return haveWayToSink
-
 # Added by LHY
 cachedHighFunc = dict()
 def get_high_function(func):
@@ -393,8 +343,9 @@ def dump_refined_pcode(high_func, startAddr=None): # for developping and debug
 
 # Return the CALL pcodeOP or the suspect source function
 # TODO: Check if the arg of CALL is related to paramAddr
-def getRelatedCallPcodeOp(hfunc, refAddr, paramAddr):
+def getRelatedCallPcodeOp(hfunc, refAddr, param="", paramAddr=None):
     calleeFunc = None
+    paramPos = None # zero means the first parameter
     basicBlock = None
     opiter = hfunc.getPcodeOps()
     while opiter.hasNext():
@@ -413,15 +364,31 @@ def getRelatedCallPcodeOp(hfunc, refAddr, paramAddr):
             # print("{0}: {1}".format(a2h(insAddr), op.toString()))
             # Only find the closest CALL pcode.
             if op.getMnemonic() == "CALL":
-                calleeVar = op.getInput(0)
-                calleeFunc = getFunctionContainingPlus(calleeVar.getAddress())
-                print("Possible source function: " + calleeFunc.getName())
+                inputNodesNum = op.getNumInputs()
+                argsNum = inputNodesNum - 1
+                for argpos in range(argsNum):
+                    # TODO: Handle argpos which no less than 4.
+                    if not 0 <= argpos <= 3:
+                        break
+                    curStr = getStrArg(insAddr, argpos)
+                    if not curStr:
+                        continue
+                    if curStr==param:
+                        calleeVar = op.getInput(0)
+                        calleeFunc = getFunctionContainingPlus(calleeVar.getAddress())
+                        paramPos = argpos
+                        print("Find source function: {0} ({1} in pos: {2})".format(calleeFunc.getName(), curStr, str(argpos)))
+                    else:
+                        print("Function call argument mismatch!")
                 break
-    return calleeFunc
+    return calleeFunc, paramPos
 
 # Deduce the data receive function
+# funcParaPos: function -> list(param_positions)
+funcParaPos = defaultdict(lambda: [])
 def searchFunc(paramTargets):
-    possibleSourceFunctions = dict() # store the immediate results
+    # function -> set(keywords)
+    possibleSourceFunctions = defaultdict(lambda: set()) # Store the immediate results, deduplicate the params
     for target in paramTargets:
         curAddr = currentProgram.minAddress
         end = currentProgram.maxAddress
@@ -445,23 +412,23 @@ def searchFunc(paramTargets):
                             hfunc = get_high_function(caller)
                             if not hfunc:
                                 continue
-                            func = getRelatedCallPcodeOp(hfunc, refAddr=ref2.fromAddress, paramAddr=curAddr)
+                            func, argpos = getRelatedCallPcodeOp(hfunc, refAddr=ref2.fromAddress, param=target, paramAddr=curAddr)
                             if func is not None:
-                                if func in possibleSourceFunctions.keys():
-                                    possibleSourceFunctions[func] += 1
-                                else:
-                                    possibleSourceFunctions[func] = 0
+                                # possibleSourceFunctions[func] += 1
+                                possibleSourceFunctions[func].add(target)
+                            if argpos is not None:
+                                funcParaPos[func].append(argpos)
                 else:
                     print "Find param ref:", caller.getName(), a2h(paramRefAddr), target
                     hfunc = get_high_function(caller)
                     if not hfunc:
                         continue
-                    func = getRelatedCallPcodeOp(hfunc, refAddr=paramRefAddr, paramAddr=curAddr)
+                    func, argpos = getRelatedCallPcodeOp(hfunc, refAddr=paramRefAddr, param=target, paramAddr=curAddr)
                     if func is not None:
-                        if func in possibleSourceFunctions.keys():
-                            possibleSourceFunctions[func] += 1
-                        else:
-                            possibleSourceFunctions[func] = 1
+                        # possibleSourceFunctions[func] += 1
+                        possibleSourceFunctions[func].add(target)
+                    if argpos is not None:
+                        funcParaPos[func].append(argpos)
                 # break #
             curAddr = curAddr.add(1)
             # break #
@@ -469,16 +436,82 @@ def searchFunc(paramTargets):
     sortedSourceFunctions = dict(sorted(
         possibleSourceFunctions.items(), 
         reverse=True,
-        key=lambda x: x[1]
+        key=lambda x: len(x[1]) # related keyword_num
     ))
-    print(sortedSourceFunctions)
-    result = dict()
-    for func, refNum in sortedSourceFunctions.items():
-        # if refNum < 5: # Heuristic
-        #     continue
-        func_str = func.getName() + "@" + a2h(func.getEntryPoint())
-        result[func_str] = refNum
-    return result
+    return sortedSourceFunctions
+    # sortedSourceFunctions: function -> set(keywords)
+
+def dumpJsonResults(file, result):
+    with open(file, 'w') as source_f:
+        json_result = dict()
+        for func, keywordSet in result.items():
+            func_str = func.getName() + "@" + a2h(func.getEntryPoint())
+            refNum = len(keywordSet)
+            # Calculate the keyword parameter position
+            myCounter = Counter(funcParaPos[func])
+            most_common_element = myCounter.most_common(1)
+            keywordParamPos = most_common_element[0][0]
+            json_result[func_str] = {
+                "keywordParamPos" : keywordParamPos,
+                "sourceFuncRefNum" : refNum
+            }
+        json.dump(json_result, source_f, indent=2)
+
+def getNewSourceFunc():
+    JsonResultsFile = os.path.join(os.path.dirname(getScriptArgs()[1]), "possible_sources.json")
+    if not os.path.exists(JsonResultsFile):
+        print("Fail to find result file!")
+        return None, None
+    black_list = ["sprintf", "snprintf", "strcmp", "strncmp"]
+    paramPos = None
+    funcName = None
+    sourceFunc = None
+    with open(JsonResultsFile, 'r') as f:
+        result = json.load(f)
+        maxRefNum=0
+        for s, data in result.items():
+            name = s.split("@")[0]
+            if name in black_list:
+                continue
+            refNum = data["sourceFuncRefNum"]
+            if refNum >= maxRefNum:
+                maxRefNum = refNum
+                funcName = name
+                paramPos = data["keywordParamPos"]
+    sourceFunc = getFunction(funcName)
+    if sourceFunc is None:
+        for f in currentProgram.functionManager.getFunctions(True):
+            if f.name == funcName:
+                sourceFunc = f
+                break
+    if sourceFunc and paramPos and maxRefNum>5:
+        return sourceFunc, paramPos
+    return None, None
+
+# Using possible_sources.json to find more keyword parameters.
+def findNewParam(targets):
+    newParams = set()
+    # Extract new param keywords based on sourceFunc and paramPos
+    sourceFunc, paramPos = getNewSourceFunc()
+    if not sourceFunc:
+        print "Fail to deduce new source function!"
+        return
+    print("Source func entry: ", (sourceFunc.entryPoint))
+    for ref in getReferencesTo(sourceFunc.entryPoint):
+        # print(hex(ref.fromAddress.getOffset()))
+        if not getFunctionContainingPlus(ref.fromAddress): 
+            continue
+        keyword = getStrArg(ref.fromAddress, paramPos)
+        if keyword and keyword not in targets: 
+            newParams.add(keyword)
+    print "Find {0} new parameters!".format(len(newParams))
+    print(newParams)
+    keywordFile = getScriptArgs()[0]
+    newKeywordFile = keywordFile + "_extra"
+    with open(newKeywordFile, "w+") as f:
+        for param in newParams:
+            f.write(param + " ")
+        print("End writing to " + keywordFile)
 
 # For manual reversing
 def findPossibleSinks():
@@ -554,26 +587,22 @@ if __name__ == '__main__':
     # for line in possibleSinks:
     #     print(line)
 
-    # Test
-    source_result_path = os.path.join(os.path.dirname(args[1]), "possible_sources.json")
+    # Infer the possible source function
     result = searchFunc(paramTargets)
-    with open(source_result_path, 'w') as source_f:
-        json.dump(result, source_f, indent=2)
+    # Dump json file
+    source_result_path = os.path.join(os.path.dirname(args[1]), "possible_sources.json")
+    dumpJsonResults(source_result_path, result)
+
     # Get max
-    maxRefNum=0
-    finalSourceFunc = None
-    black_list = ["sprintf", "snprintf", "strcmp", "strncmp"]
-    for name, num in result.items():
-        if name.split("@")[0] in black_list:
-            continue
-        if num >= maxRefNum:
-            finalSourceFunc = name
-            maxRefNum = num
-    if finalSourceFunc and result[finalSourceFunc]>5:
-        # finalSourceFunc = max(result, key=result.get)
-        print "Final Source Function", finalSourceFunc
+    finalSourceFunc, keywordParamPos = getNewSourceFunc()
+    if finalSourceFunc:
+        print "Final Source Function", finalSourceFunc.getName()
+        print "Keyword parameter position: ", str(keywordParamPos)
     else:
         print "Fail to deduce new source function!"
+
+    # Find new parameters and write to keyword_extract_result dir.
+    findNewParam(paramTargets)
 
     t = time.time() - t
     print 'Time Elapsed:', t

@@ -404,6 +404,7 @@ if __name__ == '__main__':
     #     for i in config_setter_sum_data:
     #         print >>config_setter_sum, i
 
+    # Dump config_setter_sum.json file.
     if config_setter_sum is not None:
         for shared_keyword in config_setter_sum_data.keys():
             config_setter_sum_data[shared_keyword].sort()

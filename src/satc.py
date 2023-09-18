@@ -217,7 +217,7 @@ def ghidra_analysise(args, border_bin):
     ghidra_scripts = args.ghidra_script
 
     if "all" in ghidra_scripts:
-        ghidra_scripts = ["ref2share", "ref2sink_bof", "ref2sink_cmdi"]
+        ghidra_scripts = ["share2sink", "ref2sink_bof", "ref2sink_cmdi"]
 
     # keyword_file = os.path.join(front_result_output, "detail", "Clustering_result_v2.result")
 
