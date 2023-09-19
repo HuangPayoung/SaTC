@@ -10,6 +10,8 @@ from ghidra.program.util import SymbolicPropogator
 from ghidra.program.model.mem import MemoryAccessException
 from ghidra.util.exception import CancelledException
 from ghidra.program.model.symbol.FlowType import UNCONDITIONAL_CALL
+# Added by LHY
+from ghidra.util import UndefinedFunction 
 from collections import Counter, defaultdict
 import json
 
@@ -19,6 +21,7 @@ heuristicMin = 4
 sinks = ['system', '___system', 'bstar_system', 'popen', 'doSystemCmd', 'doShell', 'twsystem']
 digest = ['strcpy', 'sprintf', 'memcpy', 'strcat']
 
+# zero means the first param.
 shareFunctionKeyPos = {
     'nvram_safe_get': 0,
     'nvram_bufget': 1,
@@ -48,19 +51,11 @@ syms = {}
 analyzer = None
 
 
-# Abandoned
-def parseShare(paramFile):
-    with open(paramFile) as f:
-        lines = f.read().splitlines()
-    lines = lines[lines.index('Shares:') + 1:]
-    shareResult = defaultdict(set)
-    nameToFunc = {}
-    for line in lines:
-        funcName, key = line.split()
-        funcName = funcName.replace('set', 'get')
-        if funcName in nameToFunc:
-            func = nameToFunc[funcName]
-        else:
+# Added by LHY
+nameToFunc = {}
+def initNameToFunc():
+    for funcName in shareFunctionKeyPos.keys():
+        if funcName not in nameToFunc:
             func = getFunction(funcName)
             if func is None:
                 for f in currentProgram.functionManager.getFunctions(True):
@@ -68,12 +63,7 @@ def parseShare(paramFile):
                         func = f
                         break
             nameToFunc[funcName] = func
-        if func:
-            shareResult[func].add(key)
-    return shareResult
 
-# Added by LHY
-nameToFunc = {}
 def parseShareJson(paramFile):
     config_setter_sum_data = dict()
     with open(paramFile) as f:
@@ -83,9 +73,8 @@ def parseShareJson(paramFile):
         config_getters = []
         for item in config_setter_sum_data[shared_keyword]:
             config_setter = item.split()[1]
-            # TODO: In fact, the nvram func names doesn't have to be completely related.
             funcName = config_setter.replace('set', 'get')
-            # func = nameToFunc[funcName]
+            # In fact, the nvram func names doesn't have to be completely related.
             if "nvram" in funcName:
                 for name, func in nameToFunc.items():
                     if "nvram" in name:
@@ -98,16 +87,7 @@ def parseShareJson(paramFile):
                 shareResult[func].add(shared_keyword)
     return shareResult
 
-def initnameToFunc():
-    for funcName in shareFunctionKeyPos.keys():
-        if funcName not in nameToFunc:
-            func = getFunction(funcName)
-            if func is None:
-                for f in currentProgram.functionManager.getFunctions(True):
-                    if f.name == funcName:
-                        func = f
-                        break
-            nameToFunc[funcName] = func
+
 
 def a2h(address):
     return '0x' + str(address)
@@ -291,43 +271,66 @@ def findSinkPath(refaddr, stringval, stringaddr, shareFunc):
     vulnerable = dfs(startFunc, [], refaddr)
     return vulnerable
 
+
+def getFunctionContainingPlus(addr):
+    func = getFunctionContaining(addr)
+    if func is not None:
+        return func
+    undefinedFunc = UndefinedFunction.findFunction(currentProgram, addr, ConsoleTaskMonitor())
+    if undefinedFunc is not None:
+        # eg. UndefinedFunction_0008dd10 -> FUN_0008dd10
+        entryPoint = undefinedFunc.getEntryPoint()
+        oldName = undefinedFunc.getName()
+        newName = oldName.replace("UndefinedFunction", "FUN")
+        func = createFunction(entryPoint, newName)
+        return func
+    return None
+
 referencedKeywordNotToSink = []
-def searchShareFunc(func):
-    for ref in getReferencesTo(func.entryPoint):
-        if ref.referenceType != UNCONDITIONAL_CALL:
-            continue
-        regValue = getCallingArgs(ref.fromAddress, shareFunctionKeyPos[func.name])
-        if regValue:
+def searchShareFunc(parsedResult):
+    # parsedResult: config_getter function -> set of keywords
+    for func, keywordSet in parsedResult.items():
+        for ref in getReferencesTo(func.entryPoint):
+            if ref.referenceType != UNCONDITIONAL_CALL:
+                continue
+            if not getFunctionContainingPlus(ref.fromAddress): 
+                continue
+            paramPos = shareFunctionKeyPos[func.name]
+            regValue = getCallingArgs(ref.fromAddress, paramPos)
+            if not regValue:
+                continue
             strAddr = toAddr(regValue.value)
-            key = getStr(strAddr)
-            if key and key in shareResult[func]:
-                vulnerable = findSinkPath(ref.fromAddress, key, strAddr, func)
+            keyword = getStrArg(ref.fromAddress, paramPos)
+            if keyword and keyword in keywordSet:
+                print("Search Func:{0} and Keyword:{1}.".format(func.name, keyword))
+                vulnerable = findSinkPath(ref.fromAddress, keyword, strAddr, func)
                 if not vulnerable:
-                    referencedKeywordNotToSink.append(key + ' @ ' + a2h(ref.fromAddress))
+                    referencedKeywordNotToSink.append(keyword + ' @ ' + a2h(ref.fromAddress))
 
 
 if __name__ == '__main__':
+    t = time.time()
     args = getScriptArgs()
-    initnameToFunc()
-    with open(args[0]) as file:
-        config_setter_sum_data = json.load(file)
-    shareResult = parseShareJson(args[0])
-    # shareResult: config_getter function -> set of keywords
     f = None
     if len(args) > 1:
         f = open(args[1], 'w')
+    else:
+        print "No output file!";exit(0)
 
+    initNameToFunc()
+
+    shareResult = parseShareJson(args[0])
+    # shareResult: config_getter function -> set of keywords
+    
     print >>f, 'binary base:', a2h(currentProgram.imageBase)
-    t = time.time()
-    for func in shareResult:
-        searchShareFunc(func)
+    searchShareFunc(shareResult)
+
     t = time.time() - t
     print 'Time Elapsed:', t
-
-    if f is not None:
-        print >>f, "Referenced Keywords But Not To Sink:"
-        referencedKeywordNotToSink.sort()
-        for s in referencedKeywordNotToSink:
-            print >>f, "\t" + s
-        print >>f, 'Time Elapsed:', t
-        f.close()
+        
+    # print >>f, "Referenced Keywords But Not To Sink:"
+    # referencedKeywordNotToSink.sort()
+    # for s in referencedKeywordNotToSink:
+    #     print >>f, "\t" + s
+    # print >>f, 'Time Elapsed:', t
+    # f.close()

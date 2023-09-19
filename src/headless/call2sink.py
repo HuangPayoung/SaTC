@@ -457,6 +457,7 @@ def dumpJsonResults(file, result):
             }
         json.dump(json_result, source_f, indent=2)
 
+# Select the most possible source func, based on possible_sources.json.
 def getNewSourceFunc():
     JsonResultsFile = os.path.join(os.path.dirname(getScriptArgs()[1]), "possible_sources.json")
     if not os.path.exists(JsonResultsFile):
