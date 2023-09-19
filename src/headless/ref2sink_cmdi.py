@@ -214,6 +214,7 @@ safeFuncs = set()
 referenced = set()
 
 sinkPoints = set()
+pathNumCounter = defaultdict(lambda: 0)
 def findSinkPath(refaddr, stringaddr, stringval):
     pending = []
 
@@ -235,6 +236,12 @@ def findSinkPath(refaddr, stringaddr, stringval):
             inst = inst.next
 
     def printpath(path):
+        # Added by LHY
+        if pathNumCounter[a2h(refaddr)] > 500:
+            print "Too many paths from this paramRefAddr!"
+            return
+        else:
+            pathNumCounter[a2h(refaddr)] += 1
         print >>f, '[Param "%s"(%s), Referenced at %s : %s]' % (stringval, a2h(stringaddr), startFunc, a2h(refaddr)),
         for i in range(len(path)):
             addr, callee = path[i][:2]

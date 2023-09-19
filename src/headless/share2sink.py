@@ -197,7 +197,7 @@ callMap = {}
 safeFuncs = set()
 referenced = set()
 
-
+pathNumCounter = defaultdict(lambda: 0)
 def findSinkPath(refaddr, stringval, stringaddr, shareFunc):
     pending = []
 
@@ -219,6 +219,12 @@ def findSinkPath(refaddr, stringval, stringaddr, shareFunc):
             inst = inst.next
 
     def printpath(path):
+        # Added by LHY
+        if pathNumCounter[a2h(refaddr)] > 500:
+            print "Too many paths from this paramRefAddr!"
+            return
+        else:
+            pathNumCounter[a2h(refaddr)] += 1
         print >>f, '[Key "%s"(%s), %s at %s : %s]' % (stringval, a2h(stringaddr), shareFunc, startFunc, a2h(refaddr)),
         for i in range(len(path)):
             addr, callee = path[i][:2]
