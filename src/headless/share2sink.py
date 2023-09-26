@@ -28,6 +28,8 @@ shareFunctionKeyPos = {
     'getenv': 0,
     'nvram_get': 1,
     'acosNvramConfig_get': 0,
+    'bcm_nvram_get': 0,
+    'envram_get_value': 0,
 }
 needCheckConstantStr = {
     'system': 0,

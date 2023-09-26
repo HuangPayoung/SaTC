@@ -231,8 +231,8 @@ def ghidra_analysise(args, border_bin):
     config_setter_sum = os.path.join(ghidra_result_output, "config_setter_sum.json")
     isExist = os.path.exists(config_setter_sum)
     # 如果指定了相关参数，就先对所有边界二进制做一遍ref2share脚本的预检测
-    # if ("share2sink" in ghidra_scripts or "ref2share" in ghidra_scripts):
-    if ("share2sink" in ghidra_scripts or "ref2share" in ghidra_scripts) and not isExist:
+    if ("share2sink" in ghidra_scripts or "ref2share" in ghidra_scripts):
+    # if ("share2sink" in ghidra_scripts or "ref2share" in ghidra_scripts) and not isExist:
         # run ref2share
         s = "ref2share"
         random = uuid.uuid4().hex
